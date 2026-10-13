@@ -61,4 +61,6 @@ Pythonの依存と再現コマンドは docs/compute-method.md を参照して�
 
 Decision Makerは公開PagesのChromeで実行しました。モデル整合性、架空の日本語4例の生のSDK出力、初回/再実行、空選択拒否、evaluateChoice中のWorker終了・N/A表示と再初期化後の実推論を確認。定期約61.3秒と新規Workerのclose約29.5秒のGoogle metrics POSTをアプリのガードがnative fetch前で拒否するイベントを確認しました。ブラウザ全体のパケット取得や既存SW管理下を検証したとは扱いません。Coreの画像検出も再確認しています。
 
-英語LLMの追加ページはNodeでの実CPU生成・streamingと独立したソース/単体テストを通過し、実ブラウザ確認は公開後に行います。Node shimや保存済みの回答は配布コードにありません。Main/Worker受信時間とSDK TTFT、チャンク数とSDK token数を区別します。SW互換性handshakeはfake-platformテストであり、実SW/browser推論の代替ではありません。
+英語LLMはcommit 6c966bb169b6a1c36228225786ab96925363bdcdの公開generation/を同じChromeで実行しました。確認操作後の公式374 MBモデルのCORS取得・Main/Worker SHA-256、初回16.63秒の実生成（21 SDK decode tokens / 20実チャンク）、別入力でのEngine再利用11.91秒、旧結果消去、空入力・日本語拒否、sendMessageStreaming実行中のStopによるWorker破棄と中断表示、明示的なモデル再取得・新規初期化後の実生成20.08秒（40 SDK decode tokens）、モデル解放後の生成無効化を確認しました。詳細と観測範囲はdocs/generation-lab.md。固定loader/WASMはHTTP HEADでも同じURLから200・リダイレクトなしと確認しましたが、ブラウザ全体のパケット監査ではありません。
+
+Node shimや保存済みの回答は配布コードにありません。Main/Worker受信時間とSDK TTFT、チャンク数とSDK token数を区別します。SW互換性handshakeはfake-platformテストであり、実SW/browser推論の代替ではありません。ローカルモデルFile経路・既存SW管理下・オフライン・モバイル・他ブラウザ・実メモリ回収量は未確認です。106件のJavaScript単体テストとproduction buildも別途合格しています。
