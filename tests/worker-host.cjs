@@ -1,0 +1,5 @@
+// Exercise the deployed classic-worker bundle under Node. Not a browser test.
+const {parentPort}=require('node:worker_threads');const fs=require('node:fs');const vm=require('node:vm');const path=require('node:path');const {pathToFileURL}=require('node:url');
+global.self=global;global.require=require;global.__dirname=path.resolve('public/wasm');global.location={href:pathToFileURL(path.resolve('public/wasm/inference-worker.js')).href};global.importScripts=u=>vm.runInThisContext(fs.readFileSync(new URL(u),'utf8'),{filename:new URL(u).pathname});global.postMessage=v=>parentPort.postMessage(v);
+global.fetch=async (u)=>{const url=new URL(u);if(url.protocol!=='file:'||!url.pathname.startsWith(path.resolve('public')+'/'))throw Error('Unexpected network request '+u);const data=await fs.promises.readFile(url);return new Response(data,{status:200,headers:{'Content-Length':String(data.length),'Content-Type':url.pathname.endsWith('.json')?'application/json':'application/octet-stream'}})};
+vm.runInThisContext(fs.readFileSync('public/wasm/inference-worker.js','utf8'),{filename:'deployed-inference-worker.js'});parentPort.on('message',data=>global.onmessage({data}));

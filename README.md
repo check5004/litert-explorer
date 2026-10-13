@@ -60,6 +60,10 @@ npm run preview
 
 トークン化だけに @huggingface/transformers 3.7.2 を使用します。return_tensor:falseで通常のID配列を受け取り、ONNXで推論しません。126内容トークンにBOS/EOSを加えて128へpadするため、長文でもEOSを落としません。日本語文書8件・通常の3クエリのID一致は独立検証済みですが、Precompiled文字正規化の実装には元のRust tokenizersと差があり、半角濁点・結合文字など一部UnicodeでIDが異なることがあります。厳密な本番用途には同一トークナイザーのWASM化等が必要です。
 
+## サンプルデータの由来
+
+src/corpus.tsの8文書と検索例は、この教育用デモのために作成した架空の固定データです。実在の会社の文書、利用者の会話、実際に入力された検索履歴を転用したものではありません。初期表示とテストは同じ固定データを使用します。4枚の同梱画像もAI生成で、生成時の内容説明はpublic/samples/provenance.jsonに記録しています。
+
 ## データ・ネットワーク
 
 - 入力文・ユーザー画像の外部送信、リモート推論、解析/広告、外部フォントはありません。
@@ -75,7 +79,7 @@ npm run preview
 
 確認済み: TypeScript型検査、production build、算術/入力/トークン境界の単体テスト、Python静的分析/変換38テスト、実際のLiteRT.js WASMでの日本語検索、および元/変換モデルのnative出力同値性。Nodeの最小ホストshimでSDKと配布Workerを実行したテストは、ブラウザテストの代わりではありません。shimはtests内のみで、アプリ配布コードには含まれません。
 
-実行方法と証跡は docs/verification.md を参照。
+再現方法と検証範囲は docs/verification.md を参照。公開ソースには過去の実行ログ・監査JSON・証跡画像を同梱しません。
 
 ## 開発用テスト
 

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-09",
+  "generationMethod": "AI-generated with OpenAI, one independent prompt per scene",
+  "source": "AI-generated. Original local PNG outputs copied without image modification.",
+  "annotationNote": "Visible classes are human review notes, not verified bounding-box annotations or guaranteed detector outputs.",
+  "samples": [
+    {
+      "id": "desk",
+      "file": "desk.png",
+      "title": "Desk essentials",
+      "visibleClasses": [
+        "laptop",
+        "cup",
+        "book",
+        "potted plant",
+        "chair"
+      ],
+      "primaryClasses": [
+        "laptop",
+        "cup",
+        "book"
+      ],
+      "prompt": "Use case: photorealistic-natural. Asset type: sample input photo for an object detection web demo. Create one realistic square documentary photograph of a tidy wooden desk in natural window light. The three clear subjects are one open unbranded laptop with a blank dark screen, one ceramic coffee cup with a visible handle, and one closed plain hardcover book with visible pages. All three objects fully in frame, clearly separated, recognizable at thumbnail size, occupying much of the image. View from slightly above at a three-quarter angle. Natural textures and shadows, realistic proportions. No humans. No text, logos, watermarks, bounding boxes, detection labels or annotations. This is a photo, not a collage or a graphic."
+    },
+    {
+      "id": "street",
+      "file": "street.png",
+      "title": "Afternoon ride",
+      "visibleClasses": [
+        "person",
+        "bicycle",
+        "backpack"
+      ],
+      "primaryClasses": [
+        "person",
+        "bicycle"
+      ],
+      "prompt": "Use case: photorealistic-natural. Asset type: sample input photo for an object detection web demo. Create one realistic square street photograph in gentle daylight. Show one adult wearing casual clothes standing beside a complete ordinary bicycle on a quiet paved city street. Both the person's full body and the bicycle, including both wheels, are entirely inside the frame and large enough for easy recognition at thumbnail size. Person occupies the left half and bicycle to the right, with only one hand resting on its handlebar. Natural plausible anatomy and bicycle construction. Simple unobtrusive urban facade behind them, no crowds. Eye-level camera, crisp subject details, natural colors. No readable text, logos, watermarks, bounding boxes, labels or annotations. Single photograph, no collage."
+    },
+    {
+      "id": "living-room",
+      "file": "living-room.png",
+      "title": "The best seat",
+      "visibleClasses": [
+        "dog",
+        "couch",
+        "potted plant"
+      ],
+      "primaryClasses": [
+        "dog",
+        "couch"
+      ],
+      "prompt": "Use case: photorealistic-natural. Asset type: sample input photo for an object detection web demo. Create one realistic square interior photograph in gentle daylight. A golden retriever dog sits upright on the seat of a plain teal two-seat couch in a cozy uncluttered living room. Show the complete couch with arms and legs, the dog fully visible, facing near the camera. Dog and couch are large, clear, and readily recognizable at thumbnail size. Natural canine anatomy, realistic fur and fabric texture. Pale neutral wall and simple wood floor. Natural window light and believable shadows. No humans, no text, no logos, no watermark, no bounding boxes or detection labels, no annotations. Single photograph, no collage."
+    },
+    {
+      "id": "fruit",
+      "file": "fruit.png",
+      "title": "At the table",
+      "visibleClasses": [
+        "banana",
+        "apple",
+        "orange",
+        "bowl",
+        "chair"
+      ],
+      "primaryClasses": [
+        "banana",
+        "apple",
+        "orange",
+        "bowl"
+      ],
+      "prompt": "Use case: photorealistic-natural. Asset type: sample input photo for an object detection web demo. Create one realistic square photograph of a simple light wood dining table near a window. The clear subjects, arranged separately with visible space around each, are a small bunch of two yellow bananas, two red apples, one orange, and an empty white ceramic bowl. Each subject has realistic size and natural food texture. View diagonally from above, all fruit and the whole bowl inside the frame, objects are large and recognizable at thumbnail size. Warm natural daylight, unobtrusive background. No people. No text, no logos, no watermark, no bounding boxes, no labels, no annotations. Single photograph, not a collage."
+    }
+  ]
+}

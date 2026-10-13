@@ -1,0 +1,101 @@
+{
+  "kind": "int32_input_boundary_adaptation",
+  "sourceSha256": "4735aa32b76f79d31b91a5326c7cde363ee87c13f650794729d0f3c3298b7673",
+  "adaptedSha256": "49ed146ee8deeb7dfd0da0bc65c66b6642804420263a62b63db104d4fcc79adc",
+  "byteLength": 469927196,
+  "changedByteCount": 4,
+  "patches": [
+    {
+      "tensorIndex": 0,
+      "tensorName": "serving_default_args_0:0",
+      "byteOffset": 469926807,
+      "from": "INT64",
+      "to": "INT32",
+      "fromByte": 4,
+      "toByte": 2
+    },
+    {
+      "tensorIndex": 1,
+      "tensorName": "serving_default_args_1:0",
+      "byteOffset": 469926707,
+      "from": "INT64",
+      "to": "INT32",
+      "fromByte": 4,
+      "toByte": 2
+    },
+    {
+      "tensorIndex": 242,
+      "tensorName": "__main__.MeanPoolingWrapper/transformers.models.bert.modeling_bert.BertModel_transformer;2",
+      "byteOffset": 469812911,
+      "from": "INT64",
+      "to": "INT32",
+      "fromByte": 4,
+      "toByte": 2
+    },
+    {
+      "tensorIndex": 896,
+      "tensorName": "__main__.MeanPoolingWrapper;1",
+      "byteOffset": 469480631,
+      "from": "INT64",
+      "to": "INT32",
+      "fromByte": 4,
+      "toByte": 2
+    }
+  ],
+  "allOtherBytesPreserved": true,
+  "weightsPreserved": true,
+  "operatorsPreserved": true,
+  "inputContract": "Int32 token IDs within the tokenizer vocabulary and binary (0/1) attention masks, shape [1,128].",
+  "equivalenceScope": "Existing CAST to INT32 for token IDs and existing CASTs to FLOAT32 after mask RESHAPEs. Equivalent numeric inputs for valid int32-range values; not a general int64 conversion.",
+  "runtimeValidation": "This manifest proves the byte-preserving adaptation only. Test inference in the target runtime separately.",
+  "reference": "https://github.com/tensorflow/tensorflow/blob/v2.18.0/tensorflow/lite/kernels/cast.cc",
+  "sourceFilename": "minilm.tflite",
+  "adaptedFilename": "minilm-int32.tflite",
+  "nativeRuntimeValidation": {
+    "runtime": "ai-edge-litert==2.1.0",
+    "numpyVersion": "2.2.6",
+    "numThreads": 1,
+    "cases": [
+      {
+        "name": "short_padded",
+        "outputShape": [
+          1,
+          384
+        ],
+        "maxAbsoluteDifference": 0.0,
+        "bitwiseEqual": true,
+        "finite": true
+      },
+      {
+        "name": "full_sequence",
+        "outputShape": [
+          1,
+          384
+        ],
+        "maxAbsoluteDifference": 0.0,
+        "bitwiseEqual": true,
+        "finite": true
+      },
+      {
+        "name": "all_padding",
+        "outputShape": [
+          1,
+          384
+        ],
+        "maxAbsoluteDifference": 0.0,
+        "bitwiseEqual": true,
+        "finite": true
+      },
+      {
+        "name": "gapped_mask",
+        "outputShape": [
+          1,
+          384
+        ],
+        "maxAbsoluteDifference": 0.0,
+        "bitwiseEqual": true,
+        "finite": true
+      }
+    ]
+  }
+}

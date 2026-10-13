@@ -1,0 +1,25 @@
+node_modules/
+dist/
+tmp/
+.asset-cache/
+public/wasm/
+public/models/*.tflite
+public/tokenizer/
+public/inference-worker.js*
+*.zip
+__pycache__/
+
+# Local-only execution output and generated material
+docs/*.log
+docs/browser-*.png
+docs/browser-downloaded-log.json
+public/asset-checksums.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Do not publish recorded runs or review evidence
+docs/*.json
+docs/*evidence*.png
