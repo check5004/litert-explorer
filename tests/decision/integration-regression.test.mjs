@@ -9,6 +9,7 @@ import { makeBootstrapSource } from '../../public/decision/bootstrap.mjs';
 // browser, load the SDK/model, or establish CSP/Worker/browser compatibility.
 const mainSource = (await readFile(new URL('../../public/decision/main.mjs', import.meta.url), 'utf8'))
   .replace(/^import [^\n]+;\n/gm, '')
+  .replace('export function mountDecision', 'function mountDecision')
   .replaceAll('import.meta.url', JSON.stringify('https://local.test/probe/main.mjs'));
 
 function eventTarget() {
@@ -18,6 +19,10 @@ function eventTarget() {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
     },
+    removeEventListener(type, listener) {
+      listeners.set(type, (listeners.get(type) ?? []).filter(item => item !== listener));
+    },
+    listenerCount() { return [...listeners.values()].reduce((count, list) => count + list.length, 0); },
     dispatch(type, event = {}) {
       for (const listener of listeners.get(type) ?? []) listener(event);
     },
@@ -28,11 +33,12 @@ function element(id = '') {
   return {
     ...eventTarget(), id, children: [], textContent: '', value: '', disabled: false,
     append(...children) { this.children.push(...children); },
+    remove() { this.removed = true; },
     get lastChild() { return this.children.at(-1); },
   };
 }
 
-function fixture(controller = null) {
+function fixture(controller = null, { autoActivate = true, assetBase = 'https://local.test/probe/', appBase = 'https://local.test/' } = {}) {
   const serviceWorker = { ...eventTarget(), controller };
   const elements = new Map();
   const get = id => {
@@ -40,8 +46,10 @@ function fixture(controller = null) {
     return elements.get(id);
   };
   const document = {
-    ...eventTarget(), getElementById: get, createElement: () => element(),
+    ...eventTarget(), getElementById() { throw new Error('Document-global IDs are forbidden'); }, createElement: () => element(),
   };
+  const root = { ...element('shadow-root'), querySelector: selector => get(selector.slice(1)) };
+  const intervals = new Map(); let nextInterval = 0;
   const workers = [];
   const revokedURLs = [];
   class Worker {
@@ -68,12 +76,17 @@ function fixture(controller = null) {
   MockURL.createObjectURL = () => `blob:https://local.test/mock-${++urlIndex}`;
   MockURL.revokeObjectURL = url => revokedURLs.push(url);
   const window = { ...eventTarget(), isSecureContext: true, Worker };
-  vm.runInNewContext(mainSource, {
+  const context = {
     CRITERIA, SAMPLES, TIMING_LABELS, assetURLs, makeBootstrapSource,
-    document, window, navigator: { serviceWorker }, crypto: { subtle: {} }, WebAssembly: {},
+    document, root, assetBase, appBase, window, navigator: { serviceWorker }, crypto: { subtle: {} }, WebAssembly: {},
     Worker, URL: MockURL, Blob, performance: { now: () => 100 },
-    location: { href: 'https://local.test/probe/' }, setInterval() {},
-  }, { filename: 'main.mjs' });
+    location: { href: 'https://local.test/probe/' },
+    setInterval(callback) { intervals.set(++nextInterval, callback); return nextInterval; },
+    clearInterval(id) { intervals.delete(id); },
+  };
+  vm.runInNewContext(mainSource + '\nglobalThis.panel = mountDecision(root, {assetBase, appBase});', context, { filename: 'main.mjs' });
+  const panel = context.panel;
+  if (autoActivate) panel.activate();
   const evidence = () => JSON.parse(get('evidence').textContent);
   const timing = key => {
     const row = get('timings').children[Object.keys(TIMING_LABELS).indexOf(key)];
@@ -95,7 +108,7 @@ function fixture(controller = null) {
     worker.emit({ type: 'state', state: 'closed' });
     worker.emit({ type: 'closed', counts: { allowed: 2, blocked: 1, csp: 0 } });
   }
-  return { get, workers, revokedURLs, window, serviceWorker, evidence, timing, click, initializeReady, completeClose };
+  return { get, root, document, panel, intervals, workers, revokedURLs, window, serviceWorker, evidence, timing, click, initializeReady, completeClose };
 }
 
 test('expected root SW controller is accepted; a different script URL is refused', () => {
@@ -186,4 +199,30 @@ test('oversized stream reports the size violation even if reader cancellation re
 test('midstream errors cannot return a completed model buffer', async () => {
   const result = await streamFixture([[1], [2]], 6, { failReadAt: 1 });
   assert.equal(result.error?.message, 'TEST_STREAM_ERROR'); assert.equal(result.bytes, undefined);
+});
+
+test('configured nested application service worker is trusted instead of a hardcoded root path', () => {
+  const nested = fixture({ scriptURL: 'https://local.test/project/sw.js' }, {
+    assetBase: 'https://local.test/project/decision/', appBase: 'https://local.test/project/',
+  });
+  nested.click('init');
+  assert.equal(nested.workers.length, 1);
+  const wrongRoot = fixture({ scriptURL: 'https://local.test/sw.js' }, {
+    assetBase: 'https://local.test/project/decision/', appBase: 'https://local.test/project/',
+  });
+  wrongRoot.click('init');
+  assert.equal(wrongRoot.workers.length, 0);
+  assert.match(wrongRoot.get('validation').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
+});
+
+test('disposed panels remove service-worker listeners and inactive panels ignore unrelated controller/CSP changes', () => {
+  const f = fixture({ scriptURL: 'https://local.test/sw.js' });
+  f.initializeReady();
+  f.panel.deactivate();
+  const inactive = f.evidence();
+  f.serviceWorker.dispatch('controllerchange');
+  f.document.dispatch('securitypolicyviolation', { blockedURI: 'https://other.test/?secret=1', effectiveDirective: 'connect-src' });
+  assert.deepEqual(f.evidence(), inactive);
+  f.panel.dispose();
+  assert.equal(f.serviceWorker.listenerCount(), 0);
 });

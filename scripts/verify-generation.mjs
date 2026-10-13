@@ -6,7 +6,7 @@ async function walk(p){const files=[];for(const e of await fs.readdir(p,{withFil
 const files=await walk(base);
 assert(files.every(f=>!f.endsWith('.litertlm')&&!f.endsWith('.map')),'No LLM model or map may be bundled');
 assert.equal(files.filter(f=>f.endsWith('.wasm')).length,1);
-const main=await fs.readFile(base+'/main.js','utf8'),worker=await fs.readFile(base+'/runtime/lm-worker.js','utf8'),html=await fs.readFile(base+'/index.html','utf8');
+const main=await fs.readFile(base+'/main.js','utf8'),worker=await fs.readFile(base+'/runtime/lm-worker.js','utf8'),html=await fs.readFile('dist/index.html','utf8');
 assert(main.includes('textContent += data.text')&&!main.includes('.innerHTML'));
 assert(main.includes('worker?.terminate()'));
 assert(/sdk = await timed\("SDK import", \(\) => Promise\.resolve\(\)\.then\(/.test(worker));
@@ -14,6 +14,10 @@ assert(worker.indexOf('fixedProperty(self, "fetch"')<worker.indexOf('sdk = await
 assert(worker.includes('networkOpen = false'));
 assert(html.includes("connect-src 'self' https://huggingface.co https://us.aws.cdn.hf.co"));
 assert(!html.includes('cdn.jsdelivr.net'));
+const panel=await fs.readFile(base+'/panel.html','utf8');assert(panel.includes('社内共有'));
+assert(main.includes('mountGeneration'));
+const legacy=await fs.readFile(base+'/index.html','utf8');assert(legacy.includes('../#generation'));
+assert(!legacy.includes('./main.js'));
 let bytes=0;for(const f of files)bytes+=(await fs.stat(f)).size;
 assert(bytes<40e6);
 console.log(JSON.stringify({generationAssets:files.length,generationBytes:bytes,modelBundled:false,passed:true},null,2));

@@ -28,9 +28,9 @@ MediaPipe Tasks Decision Maker 1.1.0 → LiteRT-LM → LiteRT。EmbeddingGemma 2
 
 ## 通信・保存・制約
 
-SDKにはGoogleへの利用指標POSTが含まれます。サポートされたオプトアウトはなく、このアプリはfetch/XHR等のガードで転送前に拒否し、Blob Workerが継承するCSPでも外部接続を制限します。通信ログに本文・ヘッダー・APIキーは含めません。アプリのガードは悪意ある同一オリジンコードやブラウザ拡張に対するセキュリティ境界ではありません。
+SDKにはGoogleへの利用指標POSTが含まれます。サポートされたオプトアウトはなく、このアプリはfetch/XHR等のガードで転送前に拒否し、Blob Workerは共通シェルのCSPを継承します。共通CSPにはLLMモデル用のHF/CDN許可がありますが、DecisionはSDK前の完全一致許可リストで独立に通信を制限します。通信ログに本文・ヘッダー・APIキーは含めません。アプリのガードは悪意ある同一オリジンコードやブラウザ拡張に対するセキュリティ境界ではありません。
 
-Core実験のオフライン保存対象にはDecision資産を含めません。既知のroot sw.jsによる制御だけを許可し、controllerchangeではWorkerを終了して再初期化を要求します。追加ページのSW経由GETはredirect:errorです。初期化・推論中の中止はWorkerの強制終了で、SDKのclose()完了とは区別します。
+Core実験のオフライン保存対象にはDecision資産を含めません。既知のroot sw.jsによる制御だけを許可し、controllerchangeではWorkerを終了して再初期化を要求します。追加タブの資産のSW経由GETはredirect:errorです。初期化・推論中の中止はWorkerの強制終了で、SDKのclose()完了とは区別します。
 
 SHA-256照合のため157 MiBのJSバッファを保持し、さらにランタイムがメモリを使います。モバイルを推奨しません。Node実推論・単体テストに加え、公開PagesのChromeで実出力、推論中止と復帰、自然な60秒後と新規Workerのclose時の送信遮断を確認しました。全ブラウザ・Service Worker管理下を検証したものではありません。範囲はREADMEを参照してください。
 
@@ -42,3 +42,7 @@ SHA-256照合のため157 MiBのJSバッファを保持し、さらにランタ�
 - https://developers.google.com/edge/mediapipe/solutions/tasks#mediapipe_tasks_privacy_notice
 - https://github.com/google-ai-edge/mediapipe/issues/6306
 - https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers#content_security_policy
+
+## 共通タブでのライフサイクル
+
+mountDecisionはShadowRoot内に操作部だけを設置し、初期化はボタン操作まで実行しません。タブ切り替えはWorker終了・Blob URL解放・時計停止を同期的に行い、古い応答を無視します。未完了の推論はN/Aとして表示し、終了済みの実測値だけを履歴として残します。強制終了をclose成功とは扱いません。再表示しても明示的な再初期化が必要です。

@@ -5,14 +5,25 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { MODEL, assetURLs, SAMPLES } from '../../public/decision/config.mjs';
 const root = new URL('../../public/decision/', import.meta.url);
-test('document has no inline scripts, only local CSS/JS, strict CSP, fixed sample select', async () => {
-  const html = await readFile(new URL('index.html', root), 'utf8');
-  assert.match(html, /connect-src 'self'/); assert.match(html, /worker-src blob:/);
-  assert.match(html, /script-src 'self' 'wasm-unsafe-eval'/);
-  assert.doesNotMatch(html, /'unsafe-inline'|'unsafe-eval'|<textarea|<input|on(?:click|load)=/i);
-  const scripts = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
-  assert.equal(scripts.length, 1); assert.match(scripts[0][1], /src="\.\/main\.mjs"/); assert.equal(scripts[0][2], '');
-  assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('<script'));
+test('component content has fixed samples, no scripts or duplicate page chrome, and accurate download/CSP notice', async () => {
+  const html = await readFile(new URL('panel.html', root), 'utf8');
+  assert.doesNotMatch(html, /<script|<style|<textarea|<input|on(?:click|load)=|<header|<footer|<h1|<iframe|<nav/i);
+  assert.match(html, /<select id="sample"/);
+  assert.match(html, /183 MB/);
+  assert.match(html, /164,626,432 bytes/);
+  assert.match(html, /自己オリジン限定の CSP ではありません/);
+  assert.match(html, /完全一致の許可リスト/);
+  assert.match(html, /probabilities は.*相対的/);
+  assert.match(html, /SDK confidence は最大 probability とは別/);
+});
+test('component exports its scoped lifecycle and stylesheet, never an automatic initialization', async () => {
+  const main = await readFile(new URL('main.mjs', root), 'utf8');
+  const css = await readFile(new URL('style.css', root), 'utf8');
+  assert.match(main, /export function mountDecision/);
+  assert.match(main, /root\.querySelector/);
+  assert.doesNotMatch(main, /document\.getElementById|document\.querySelector/);
+  assert.match(main, /return \{ activate, deactivate, dispose \}/);
+  assert.match(css, /:host/); assert.doesNotMatch(css, /:root|(?:^|\})body\{/);
 });
 test('all asset URLs survive a nested route and remain on its exact origin', () => {
   const assets = assetURLs('https://local.test/nested/probe/main.mjs');

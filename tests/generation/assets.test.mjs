@@ -18,7 +18,7 @@ test('asset preparation rejects an unexpected SDK helper version before copying 
 });
 
 test('public explanation matches the version-checked root SW exception',async()=>{
- const html=await fs.readFile(new URL('../../public/generation/index.html',import.meta.url),'utf8');
+ const html=await fs.readFile(new URL('../../public/generation/panel.html',import.meta.url),'utf8');
  assert(!html.includes('Service Worker管理下の実行を拒否します'));
  assert(html.includes('明示的なポリシーバージョン応答'));
  assert(html.includes('実SW管理下のブラウザ試験'));
