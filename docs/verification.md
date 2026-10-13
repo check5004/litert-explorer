@@ -64,3 +64,16 @@ Decision Makerは公開PagesのChromeで実行しました。モデル整合性�
 英語LLMはcommit 6c966bb169b6a1c36228225786ab96925363bdcdの公開generation/を同じChromeで実行しました。確認操作後の公式374 MBモデルのCORS取得・Main/Worker SHA-256、初回16.63秒の実生成（21 SDK decode tokens / 20実チャンク）、別入力でのEngine再利用11.91秒、旧結果消去、空入力・日本語拒否、sendMessageStreaming実行中のStopによるWorker破棄と中断表示、明示的なモデル再取得・新規初期化後の実生成20.08秒（40 SDK decode tokens）、モデル解放後の生成無効化を確認しました。詳細と観測範囲はdocs/generation-lab.md。固定loader/WASMはHTTP HEADでも同じURLから200・リダイレクトなしと確認しましたが、ブラウザ全体のパケット監査ではありません。
 
 Node shimや保存済みの回答は配布コードにありません。Main/Worker受信時間とSDK TTFT、チャンク数とSDK token数を区別します。SW互換性handshakeはfake-platformテストであり、実SW/browser推論の代替ではありません。ローカルモデルFile経路・既存SW管理下・オフライン・モバイル・他ブラウザ・実メモリ回収量は未確認です。106件のJavaScript単体テストとproduction buildも別途合格しています。
+
+## 共通4タブ版の実ブラウザ確認 · 2026-10-13
+
+公開commit 3c794575f6d0579e388508081021e3abab2a1454をクラウドChrome（Linux）で操作しました。共通の見出しと4タブが同じdocument内にあり、iframeは0件でした。操作画面は必要になってから読み込み、初期表示のDecisionは未初期化、LLMは確認欄未チェック・取得/生成ボタン無効であることを確認しました。全ネットワークリクエストの捕捉を行ったという意味ではありません。
+
+- Decisionの明示初期化・モデルSHA-256後に、架空のエクスポート不具合を実分類。technical、SDK confidence約0.5573、evaluateChoice 3895.10 ms。自然な指標POSTはWorker開始約76.9秒後に起き、独立した通信ガードがnative fetch前に拒否。共有CSPに変更しても、このガードが働きました。
+- LLMの実ダウンロード進行（101.1 MB受信の表示）から別タブへ切り替え、取得の停止・結果消去・確認欄の解除を確認。再表示・明示確認・再取得後に実生成まで完了しました。
+- LLMの実応答はsendMessageStreaming 16.22秒、SDK decode21 tokens、実チャンク20。続けて別の架空例を開始し、sendMessageStreaming実行中に検索タブへ切り替えました。Worker終了・中断ラベル・SDK値「—」・出力消去を確認。再表示しても生成/取得は無効で、改めて確認とモデル初期化が必要でした。
+- Core検索がモデルを読み込み中に画像タブへ切り替え、その後の画像の実推論が成功。laptop、book、cupなど6件を表示しました。この統合版のブラウザ試験では検索完了までの推論は実行せず、既存のブラウザ結果と今回の実SDK CIを別に扱っています。
+- Back/ForwardとEndキーで選択タブ・URL hashが連動。decision/とgeneration/はそれぞれ共通画面の#decisionと#generationへ移動。確認したアプリ対象のエラーログは空でした。
+- デスクトップでは4列のタブが領域内に収まり、スクリーンショットで共通シェルとパネルを確認。520px以下の2列CSSはありますが、狭幅の実描画・モバイル端末を確認したとは主張しません。
+
+単体・状態遷移143件、TypeScript、production build、実Coreモデルと配布Workerの推論、Pagesのサイズ/パス検査も合格しました。実行中のWorkerをterminateすることと、OSが即時にメモリを回収することは同義ではありません。既存Service Worker管理下、オフライン、全通信捕捉、ローカルLLMファイル経路、他ブラウザ、メモリ回収量は引き続き未確認です。生ログ・入力/応答の保存物・画面画像は公開物に含めません。
