@@ -1,0 +1,45 @@
+{
+  "package": {
+    "name": "@mediapipe/tasks-decision",
+    "version": "1.1.0",
+    "registry": "https://registry.npmjs.org/@mediapipe/tasks-decision/1.1.0",
+    "tarball": "https://registry.npmjs.org/@mediapipe/tasks-decision/-/tasks-decision-1.1.0.tgz",
+    "npmIntegrity": "sha512-WjbOVtj305Lzs5IwF5TOAMDlnW8T1ILQP6efZJGMv9WZgJquwDPZzrheIQve2Zrp7COGHrYuOhuuQF6z/bWOIg==",
+    "license": "Apache-2.0",
+    "npmIntegrityVerified": true
+  },
+  "model": {
+    "repository": "https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm",
+    "revision": "9be6e8b90982095dc05c2bd162e4b954ee4dbac7",
+    "url": "https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm/resolve/9be6e8b90982095dc05c2bd162e4b954ee4dbac7/embeddinggemma-2-text-270m.litertlm",
+    "bytes": 164626432,
+    "sha256": "2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb",
+    "hashComputedFromDownloadedBytes": true,
+    "authoritativeLfsHashMatched": true,
+    "license": "Apache-2.0; directly verified cardData.license=apache-2.0",
+    "gated": false,
+    "metadataSource": "https://huggingface.co/api/models/litert-community/embeddinggemma-2-text-270m-litert-lm/revision/9be6e8b90982095dc05c2bd162e4b954ee4dbac7?blobs=true"
+  },
+  "files": [
+    {
+      "path": "assets/decision_bundle.mjs",
+      "bytes": 53395,
+      "sha256": "4fae530837fd33e07fcf438c0824940ca10b3a42be724009f561cd8fa7447a55"
+    },
+    {
+      "path": "assets/wasm/decision_wasm_module_internal.js",
+      "bytes": 318466,
+      "sha256": "e73811b8b10577e5fed4f3d8e5359571e2007c0a85a0963b856f7cb1391420b4"
+    },
+    {
+      "path": "assets/wasm/decision_wasm_module_internal.wasm",
+      "bytes": 17704152,
+      "sha256": "4e5b696bf2f69c656fe28ac018525e394d2f441c279147f0b1103be35b67562c"
+    },
+    {
+      "path": "assets/embeddinggemma-2-text-270m.litertlm",
+      "bytes": 164626432,
+      "sha256": "2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb"
+    }
+  ]
+}

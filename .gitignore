@@ -23,3 +23,8 @@ public/asset-checksums.json
 # Do not publish recorded runs or review evidence
 docs/*.json
 docs/*evidence*.png
+
+# Generated extension runtime/model assets (downloaded with checksums during build)
+public/decision/assets/
+public/generation/assets/
+*.litertlm

@@ -15,3 +15,10 @@ An Apache 2.0 license copy is included as Apache-2.0.txt. The bundled @huggingfa
 ## EfficientDet model-license provenance
 
 A MediaPipe maintainer clarified that the project's source and models, unless specifically noted otherwise, are Apache-2.0: https://github.com/google-ai-edge/mediapipe/issues/6355 . Google's current web sample uses this exact EfficientDet float32/1 asset: https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/tasks/object-detector.ts . No separate artifact-specific model-card license field is embedded in this TFLite file; its author field is MediaPipe. We preserve the exact SHA-256 in the download script and model metadata extraction. No exception was identified for this asset.
+
+## Decision Maker experiment
+
+- @mediapipe/tasks-decision 1.1.0: Google, Apache-2.0. Exact package and four deployed asset checksums: public/decision/asset-manifest.json. https://www.npmjs.com/package/@mediapipe/tasks-decision/v/1.1.0
+- EmbeddingGemma 2 Text 270M, Apache-2.0, pinned revision 9be6e8b90982095dc05c2bd162e4b954ee4dbac7. https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm/tree/9be6e8b90982095dc05c2bd162e4b954ee4dbac7
+- The version-pinned five-method Promise compatibility adapter follows Google's Apache-2.0 sample: https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/workers/decision-maker.worker.ts . It adapts return types, not model scores.
+- The SDK attempts utilization-metric uploads. The app blocks these before native transport and uses Blob-worker CSP as defense in depth. This is not an SDK opt-out. See https://developers.google.com/edge/mediapipe/solutions/tasks#mediapipe_tasks_privacy_notice .

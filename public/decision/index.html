@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src blob:; connect-src 'self'; style-src 'self'; img-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>LiteRT Lab · 問い合わせの意味で振り分ける</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./main.mjs"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <a class="home" href="../">← LiteRT Lab の実験一覧へ</a>
+      <p class="eyebrow">03 · LEARNED SEMANTIC ROUTING · CPU ONLY</p>
+      <h1>架空の問い合わせを、意味の近さで比較する</h1>
+      <p>MediaPipe Tasks → LiteRT-LM → LiteRT</p>
+      <p>学習済みの埋め込み＋意味的なスコアリングです。生成された推論説明でも、問い合わせ分類専用に学習した decision head でもありません。</p>
+    </header>
+    <section class="learning" aria-labelledby="learning-title">
+      <h2 id="learning-title">この実験で共有したいこと</h2>
+      <p><strong>学ぶ：</strong>学習済みモデルの意味表現を使い、候補の説明文に対する相対的なスコアを返す API を観察します。低水準の Tensor API と、業務に近い Tasks API の違いを比較できます。</p>
+      <p><strong>業務の入口：</strong>問い合わせを端末内で仮分類し、担当者が確認してから振り分ける用途。曖昧な問い合わせや候補の定義変更で出力が変わることも確認してください。</p>
+      <p><strong>実行経路：</strong><code>@mediapipe/tasks-decision 1.1.0 → LiteRT-LM → LiteRT / CPU・WASM</code>。ホームの <code>@litertjs/core</code> とは異なる高水準 SDK です。</p>
+    </section>
+    <aside class="notice">
+      <strong>通信とデータ</strong>
+      <p>入力は固定の架空例だけです。自由入力やファイルの読込はありません。SDK・WASM・モデルをこのページと同じオリジンから読み込みます。</p>
+      <p>SDK 1.1.0 は約 60 秒後の定期処理や close() 時に Google の指標エンドポイント（odml.pa.googleapis.com/v1/log）へ POST を試みます。このページは SDK の読込前に通信ガードを設置し、その送信を遮断します。CSP も外部接続を拒否します。SDK のオプトアウト機能ではありません。</p>
+      <p>この追加実験の資産は、ホームの「必要なファイルを保存」の対象外です。</p>
+      <p>ログは安全な送信先の origin/path・method と許可／遮断件数だけを記録し、本文・ヘッダー・API キーは記録しません。ガードの件数は通信の試行数で、ブラウザー全体のネットワーク監査ではありません。</p>
+    </aside>
+    <section aria-labelledby="control-title">
+      <h2 id="control-title">1. 初期化して試す</h2>
+      <p>EmbeddingGemma 2 Text 270M · 164,626,432 bytes（約 157 MiB）· @mediapipe/tasks-decision 1.1.0</p>
+      <p>初期化はボタンを押すまで始まりません。実バイト数と SHA-256 を検証します。ハッシュ検証でモデル全体を一時的にメモリーに保持するため、端末によっては失敗します。</p>
+      <div class="controls">
+        <button id="init" type="button">初期化</button>
+        <button id="close" type="button" disabled>close() で解放</button>
+        <button id="cancel" type="button" disabled>中止・Worker を終了</button>
+      </div>
+      <p id="status" role="status" aria-live="polite">未初期化</p>
+      <p id="elapsed">Worker 生存時間：N/A</p>
+      <progress id="download-progress" aria-label="検証対象モデルの受信バイト数" hidden></progress><p id="download-status"></p>
+      <p id="integrity">モデル整合性：未検証</p>
+      <label for="sample">架空の問い合わせ</label>
+      <select id="sample"><option value="">例を選んでください（未選択では推論しません）</option></select>
+      <p id="input" class="input-preview">未選択</p>
+      <button id="run" type="button" disabled>選んだ例で推論</button>
+      <p id="validation" role="status"></p>
+      <p class="small">中止は Worker の強制終了です。中止操作自体は SDK の close() を呼ばず、処理完了を意味しません。実行中の close() は無効です。中止後は再初期化できます。</p>
+    </section>
+    <section aria-labelledby="result-title">
+      <h2 id="result-title">2. 実際の SDK 出力</h2>
+      <p id="winner">selectedKey：N/A</p>
+      <p id="confidence">SDK confidence：N/A</p>
+      <p id="call-index">この Worker での evaluateChoice 呼び出し順：N/A</p>
+      <div class="scroll"><table><caption>raw probabilities（返された値をそのまま表示）</caption><thead><tr><th>キー</th><th>比較する説明文</th><th>出力値</th></tr></thead><tbody id="distribution"></tbody></table></div>
+      <p>probabilities は選んだ説明文どうしの相対的な出力です。実世界での正答率や校正済みの確信度ではありません。SDK confidence は最大 probability とは別の値です。曖昧な例や空の出力を別の回答に置換しません。担当先への自動振分けは行わず、人の確認を前提にします。</p>
+      <details><summary>未加工の返却オブジェクト</summary><pre id="raw">N/A</pre></details>
+    </section>
+    <section aria-labelledby="timing-title">
+      <h2 id="timing-title">3. この実行の計測値</h2>
+      <p>performance.now() による各関数の wall-clock 時間です。カーネル単体のベンチマークではありません。初回と再実行を区別します。未実行・未完了の値は N/A です。</p>
+      <div class="scroll"><table><thead><tr><th>関数・区間</th><th>ms</th><th>状態</th></tr></thead><tbody id="timings"></tbody></table></div>
+    </section>
+    <section aria-labelledby="network-title">
+      <h2 id="network-title">4. 通信ガードとライフサイクル</h2>
+      <p id="counts">fetch 許可：0 / 通信遮断：0 / CSP 違反：0</p>
+      <p>約 60 秒の自然なタイマー送信と、それ以前の close() 送信は別々の初期化で確認してください。遮断後、SDK がタイマーを止めるため、同じ Worker で両方の試行が出るとは限りません。</p>
+      <pre id="network">まだ通信イベントはありません。</pre>
+      <details><summary>このページの実行記録（再初期化でリセット）</summary><pre id="evidence">N/A</pre></details>
+    </section>
+    <footer>
+      <p>このページは LiteRT 系ランタイムの役割と実際の出力を学ぶための実験です。ブラウザーの性能・精度・安全性を保証するものではありません。</p>
+      <p><a href="https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/workers/decision-maker.worker.ts" target="_blank" rel="noopener noreferrer">公式 Promise 対応の出典</a> · <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers#content_security_policy" target="_blank" rel="noopener noreferrer">Blob Worker の CSP 継承</a></p>
+    </footer>
+  </main>
+</body>
+</html>
