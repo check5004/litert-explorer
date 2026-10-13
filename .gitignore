@@ -28,3 +28,6 @@ docs/*evidence*.png
 public/decision/assets/
 public/generation/assets/
 *.litertlm
+
+public/generation/runtime/
+public/generation/main.js

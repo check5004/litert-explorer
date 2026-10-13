@@ -4,19 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/build-worker.mjs && vite",
-    "build": "node scripts/build-worker.mjs && tsc && vite build && node scripts/postbuild.mjs",
+    "dev": "node scripts/build-worker.mjs && node scripts/build-generation.mjs && vite",
+    "build": "node scripts/build-worker.mjs && node scripts/build-generation.mjs && tsc && vite build && node scripts/postbuild.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test tests/*.test.mjs tests/decision/*.test.mjs",
-    "assets": "node scripts/prepare-assets.mjs && node scripts/prepare-decision-assets.mjs",
+    "test": "node --test tests/*.test.mjs tests/decision/*.test.mjs tests/generation/*.test.mjs",
+    "assets": "node scripts/prepare-assets.mjs && node scripts/prepare-decision-assets.mjs && node scripts/prepare-generation-assets.mjs",
     "test:browser": "node tests/browser.mjs",
     "test:integration": "node scripts/build-test-modules.mjs && node tests/semantic-integration.mjs && node tests/detection-integration.mjs",
     "test:python": "python -m unittest discover -s tests -p \"test_*.py\"",
-    "verify:pages": "node scripts/verify-pages.mjs"
+    "verify:pages": "node scripts/verify-pages.mjs && node scripts/verify-generation.mjs"
   },
   "dependencies": {
     "@litertjs/core": "2.5.3",
-    "@huggingface/transformers": "3.7.2"
+    "@huggingface/transformers": "3.7.2",
+    "@litert-lm/core": "0.18.0"
   },
   "devDependencies": {
     "typescript": "5.9.3",
@@ -24,5 +25,10 @@
     "playwright-core": "1.55.1",
     "@webgpu/types": "0.1.64",
     "sharp": "0.34.1"
+  },
+  "overrides": {
+    "@litert-lm/core": {
+      "@litertjs/wasm-utils": "2.0.0"
+    }
   }
 }

@@ -22,3 +22,8 @@ A MediaPipe maintainer clarified that the project's source and models, unless sp
 - EmbeddingGemma 2 Text 270M, Apache-2.0, pinned revision 9be6e8b90982095dc05c2bd162e4b954ee4dbac7. https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm/tree/9be6e8b90982095dc05c2bd162e4b954ee4dbac7
 - The version-pinned five-method Promise compatibility adapter follows Google's Apache-2.0 sample: https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/workers/decision-maker.worker.ts . It adapts return types, not model scores.
 - The SDK attempts utilization-metric uploads. The app blocks these before native transport and uses Blob-worker CSP as defense in depth. This is not an SDK opt-out. See https://developers.google.com/edge/mediapipe/solutions/tasks#mediapipe_tasks_privacy_notice .
+
+## Experimental English generation
+
+- @litert-lm/core 0.18.0 and its scoped @litertjs/wasm-utils 2.0.0: Google/ODML Authors, Apache-2.0. The existing Core runtime retains wasm-utils 2.5.3. Original bundle/runtime notices are preserved. https://github.com/google-ai-edge/LiteRT-LM
+- Optional model (not in the Pages artifact): litert-community/SmolLM2-360M-Instruct, Apache-2.0, public/ungated, revision 507c99cfe6541ba2bcd84818786f7b025935e5e1. The model targets Android and is not listed among this SDK's officially web-supported artifacts. https://huggingface.co/litert-community/SmolLM2-360M-Instruct

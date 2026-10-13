@@ -56,3 +56,9 @@ Pythonの依存と再現コマンドは docs/compute-method.md を参照して�
 - 大画像・破損画像を含む異常系の網羅とメモリ解放の測定
 
 実ブラウザが使える環境で npm run preview を起動し、CHROMIUM_PATHを指定して npm run test:browser を実行できます。tests/browser.mjsには追加の検証コードがありますが、このスクリプト全体の実行成功を主張するものではありません。上記の公開サイト確認はブラウザUIからの実操作です。
+
+## 追加実験（2026-10-13）
+
+Decision Makerは公開PagesのChromeで実行しました。モデル整合性、架空の日本語4例の生のSDK出力、初回/再実行、空選択拒否、evaluateChoice中のWorker終了・N/A表示と再初期化後の実推論を確認。定期約61.3秒と新規Workerのclose約29.5秒のGoogle metrics POSTをアプリのガードがnative fetch前で拒否するイベントを確認しました。ブラウザ全体のパケット取得や既存SW管理下を検証したとは扱いません。Coreの画像検出も再確認しています。
+
+英語LLMの追加ページはNodeでの実CPU生成・streamingと独立したソース/単体テストを通過し、実ブラウザ確認は公開後に行います。Node shimや保存済みの回答は配布コードにありません。Main/Worker受信時間とSDK TTFT、チャンク数とSDK token数を区別します。SW互換性handshakeはfake-platformテストであり、実SW/browser推論の代替ではありません。

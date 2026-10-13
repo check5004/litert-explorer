@@ -88,7 +88,7 @@ $('init').addEventListener('click', () => {
   $('validation').textContent = ''; $('network').textContent = 'まだ通信イベントはありません。';
   $('counts').textContent = 'fetch 許可：0 / 通信遮断：0 / CSP 違反：0';
   $('download-progress').hidden = true; $('download-status').textContent = '';
-  $('integrity').textContent = 'モデル整合性：未検証'; bornAt = null; endedAt = null;
+  $('integrity').textContent = 'モデル整合性：未検証'; bornAt = null; endedAt = null; $('elapsed').textContent = 'Worker 生存時間：N/A';
   if (!window.isSecureContext || !window.Worker || !globalThis.crypto?.subtle || typeof WebAssembly !== 'object') {
     operationError({ code: 'HTTPS_OR_LOCALHOST_AND_MODERN_BROWSER_REQUIRED' }); return;
   }
