@@ -9,3 +9,7 @@ test('own-image chooser is a keyboard-focusable button',()=>{assert(source.inclu
 
 test('failed sample decode cannot mark a different image selected',()=>{assert(source.includes("const loaded=await setImage(blob,name+'.png',loadId);if(!loaded||loadId!==imageLoadId||!coreActive)return;"));});
 test('synchronous inference dispatch failures release worker and controls',()=>{assert(source.includes('try{const w=getWorker();'));assert(source.includes('catch(error){worker?.terminate();worker=null;runId++;showError(error instanceof Error?error.message:String(error));finish(false);'));});
+
+const css=await fs.readFile(new URL('../src/style.css',import.meta.url),'utf8');
+test('four tabs pair accurate technical labels with plain-language descriptions',()=>{for(const pair of [["ベクトル検索","文章を探す"],["画像認識（物体検出）","物体を見つける"],["意味による分類","問い合わせを分ける"],["文章生成（LLM）","文章を生成する"]])assert(source.includes(`'${pair[0]}','${pair[1]}'`));assert(source.includes('<strong class="tab-title">${technical}</strong><span class="tab-description">${title}</span>'));assert(source.includes('aria-labelledby="tab-detect"'));});
+test('technical tab labels wrap without truncation in a two-column narrow layout',()=>{assert.match(css,/\.tab-copy\{[^}]*min-width:0;[^}]*white-space:normal;[^}]*overflow-wrap:anywhere/);assert.match(css,/@media\(max-width:520px\)\{[\s\S]*?\.workspace-bar nav\{grid-template-columns:1fr 1fr/);assert.match(css,/\.tab-number\{[^}]*flex:none/);assert(!css.includes('text-overflow:ellipsis'));});
