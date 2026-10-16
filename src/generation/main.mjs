@@ -1,4 +1,4 @@
-import {MODEL,SAMPLES,exactGet,validateFinalModelUrl,validatePrompt,supportsRelaxedSimd,createServiceWorkerGate} from './policy.mjs';
+import {MODEL,MODELS,getModel,exactGet,validateFinalModelUrl,validatePrompt,supportsRelaxedSimd,createServiceWorkerGate} from './policy.mjs';
 
 /**
  * The shell supplies the panel fragment and owns the shared window transport policy.
@@ -12,11 +12,12 @@ export function mountGeneration(root,{assetBase,appBase}) {
  if(assets.origin!==app.origin)throw new TypeError('Generation assets must share the application origin.');
  const doc=root.ownerDocument||document;
  const stylesheet=doc.createElement('link');stylesheet.rel='stylesheet';stylesheet.href=new URL('style.css',assets).href;root.prepend(stylesheet);
+ let selectedModel=MODEL;
  const originalFetch=window.fetch.bind(window);
- async function fetchModel(input,init={}) {
-  const url=exactGet(input,init,app.href,[MODEL.url]);
+ async function fetchModel(input,init={},model=selectedModel) {
+  const url=exactGet(input,init,app.href,[model.url]);
   const response=await originalFetch(url,{method:'GET',credentials:'omit',redirect:'follow',referrerPolicy:'no-referrer',cache:'no-store',signal:init.signal,mode:'cors'});
-  validateFinalModelUrl(response.url);
+  validateFinalModelUrl(response.url,model);
   return response;
  }
  let worker=null,abort=null,epoch=0,state='empty',file=null,startAt=0,visibleAt=null,clock=null;
@@ -30,6 +31,7 @@ export function mountGeneration(root,{assetBase,appBase}) {
  function setState(value){
   state=value;
   const unavailable=!active||disposed,busy=['loading','generating'].includes(value),ack=$('ack').checked,controlled=hasController();
+  $('model').disabled=unavailable;
   $('download').disabled=unavailable||busy||mainPreparation||!ack||controlled;
   $('local-load').disabled=unavailable||busy||mainPreparation||!ack||!file||controlled;
   $('file').disabled=unavailable||busy||mainPreparation;$('ack').disabled=unavailable||busy||mainPreparation;
@@ -40,6 +42,7 @@ export function mountGeneration(root,{assetBase,appBase}) {
   $('state').textContent=value==='stopped'&&mainPreparation?'停止済み・読み取り/ハッシュの終了待ち':({empty:'未読み込み',loading:'読み込み中',ready:'準備完了',generating:'生成中',stopped:'停止済み',error:'エラー'})[value];
  }
  function resetMetrics(){for(const id of ['elapsed','visible-time','worker-time','sdk-ttft','generated-tokens','prefill-tokens','decode-speed','chunk-count','context-tokens'])$(id).textContent='—';}
+ function resetLoadMetrics(){for(const id of ['download-time','setup-time'])$(id).textContent='—';}
  function trace(name,value){
   traces.set(name,value);$('trace').replaceChildren();
   for(const [key,item] of traces){const li=doc.createElement('li'),title=doc.createElement('b'),time=doc.createElement('span');title.textContent=key;time.textContent=item.status==='running'?'実行中':item.status==='failed'?'失敗':item.status==='interrupted'?'中断':ms(item.milliseconds);li.append(title,time);$('trace').append(li);}
@@ -73,13 +76,13 @@ export function mountGeneration(root,{assetBase,appBase}) {
   setState(state);
  }
  function beginLoad(){
-  if(!active||disposed)throw new Error('英語生成タブを開いてから開始してください。');
+  if(!active||disposed)throw new Error('文章生成タブを開いてから開始してください。');
   if(mainPreparation)throw new Error('前の読み取り/ハッシュ処理の終了を待っています。');
   if(!$('ack').checked)throw new Error('PC向けの実験であることを確認してください。');
   if(hasController())throw new Error('Service Workerの配信ポリシー確認が未完了です。ページを再読み込みしてください。');
   if(!globalThis.crypto?.subtle)throw new Error('HTTPS または localhost の安全な環境が必要です。');
   if(!supportsRelaxedSimd())throw new Error('Wasm relaxed SIMD対応のデスクトップブラウザが必要です。');
-  destroy();epoch++;mainPreparation=true;setState('loading');$('error').hidden=true;$('output').textContent='';resetMetrics();traces.clear();$('trace').replaceChildren();$('progress').hidden=false;$('progress').value=0;return epoch;
+  destroy();epoch++;mainPreparation=true;setState('loading');$('error').hidden=true;$('output').textContent='';resetMetrics();resetLoadMetrics();traces.clear();$('trace').replaceChildren();$('progress').hidden=false;$('progress').value=0;return epoch;
  }
  function endMainPreparation(id){
   // File.arrayBuffer() and subtle.digest() cannot be aborted. Never release this
@@ -89,17 +92,18 @@ export function mountGeneration(root,{assetBase,appBase}) {
   setState(state);
   if(id!==epoch&&state==='stopped')status('停止済み。Main側の読み取り/ハッシュ処理も終了しました。確認欄を確認し、モデルを再読み込みしてください。メモリの回収時期はブラウザに依存します。');
  }
- async function verifyAndStart(buffer,id){
+ async function verifyAndStart(buffer,id,model){
   if(!isCurrent(id))return;
-  if(buffer.byteLength!==MODEL.bytes)throw new Error('指定モデルのサイズ（373,719,040 bytes）と一致しません。');
+  if(buffer.byteLength!==model.bytes)throw new Error('選択モデルのサイズ（'+model.bytes.toLocaleString()+' bytes）と一致しません。');
+  const setupStartedAt=performance.now();
   status('SHA-256でモデル全体を検証中。まだ推論は始めていません。');trace('SHA-256 検証 (Main)',{status:'running'});
   const before=performance.now(),hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))].map(b=>b.toString(16).padStart(2,'0')).join('');
   if(!isCurrent(id))return;
-  if(hash!==MODEL.sha256)throw new Error('SHA-256が一致しません。指定の公式モデル以外は読み込みません。');
+  if(hash!==model.sha256)throw new Error('SHA-256が一致しません。指定の公式モデル以外は読み込みません。');
   trace('SHA-256 検証 (Main)',{status:'done',milliseconds:performance.now()-before});
   $('progress').hidden=true;status('モデル検証済み。隔離したWorkerでLiteRTを初期化しています。');
   if(!swGate?.isAccepted())throw new Error('Service Workerの制御が変わったため初期化を中止しました。');
-  worker=new Worker(new URL('runtime/lm-worker.js',assets),{name:'litert-english-lab'});
+  worker=new Worker(new URL('runtime/lm-worker.js',assets),{name:'litert-generation-lab'});
   worker.onerror=event=>{event.preventDefault();fail(new Error('Workerの実行に失敗しました。モデルを再読み込みしてください。'),id);};
   worker.onmessage=({data})=>{
    if(!isCurrent(id))return;
@@ -107,7 +111,8 @@ export function mountGeneration(root,{assetBase,appBase}) {
    else if(data.type==='blocked-network')fail(new Error('予期しない通信をブロックしたため、Workerを停止しました。'),id);
    else if(data.type==='ready'){
     if(state!=='loading')return;
-    setState('ready');status('モデル準備完了。英語の架空の文章を入力し、「生成する」を押してください。');
+    $('setup-time').textContent=ms(performance.now()-setupStartedAt);
+    setState('ready');status(model.title+'の準備ができました。入力を確認して「生成する」を押してください。');
    } else if(data.type==='chunk'){
     if(state!=='generating')return;
     if(typeof data.text==='string'&&data.text){
@@ -127,14 +132,14 @@ export function mountGeneration(root,{assetBase,appBase}) {
    } else if(data.type==='error')fail(new Error(data.message),id);
   };
   if(!isCurrent(id)||!swGate?.isAccepted())throw new Error('Service Workerの制御が変わったため初期化を中止しました。');
-  worker.postMessage({type:'initialize',buffer},[buffer]);
+  worker.postMessage({type:'initialize',modelId:model.id,buffer},[buffer]);
  }
  async function downloadModel(){
   if(!active||disposed||mainPreparation||['loading','generating'].includes(state))return;
-  let id;
+  let id;const model=selectedModel;
   try{
-   id=beginLoad();abort=new AbortController();const signal=abort.signal;const before=performance.now();trace('公式モデル GET',{status:'running'});status('公式Hugging Faceから約374 MBを取得中。入力文は送信しません。');
-   const response=await fetchModel(MODEL.url,{signal});
+   id=beginLoad();abort=new AbortController();const signal=abort.signal;const before=performance.now();trace('公式モデル GET',{status:'running'});status('Hugging Faceから'+model.downloadLabel+'を取得中。入力文は送信しません。');
+   const response=await fetchModel(model.url,{signal},model);
    if(!isCurrent(id)){await response.body?.cancel().catch(()=>{});return;}
    if(!response.ok||!response.body)throw new Error('モデルを取得できませんでした。HTTP '+response.status);
    // Content-Length can describe compressed transfer bytes; decoded byte count and SHA-256 are authoritative.
@@ -144,31 +149,31 @@ export function mountGeneration(root,{assetBase,appBase}) {
      const {value,done}=await reader.read();
      if(!isCurrent(id)){await reader.cancel();return;}
      if(done)break;
-     size+=value.byteLength;if(size>MODEL.bytes)throw new Error('配布モデルが想定サイズを超えています。');
-     chunks.push(value);$('progress').value=size/MODEL.bytes;status('公式モデル取得中：'+(size/1000000).toFixed(1)+' / 373.7 MB');
+     size+=value.byteLength;if(size>model.bytes)throw new Error('配布モデルが想定サイズを超えています。');
+     chunks.push(value);$('progress').value=size/model.bytes;status('公式モデル取得中：'+(size/1000000).toFixed(1)+' / '+(model.bytes/1000000).toFixed(1)+' MB');
     }
    }catch(error){await reader.cancel().catch(()=>{});throw error;}
-   if(size!==MODEL.bytes)throw new Error('モデルの取得が不完全です。');
+   if(size!==model.bytes)throw new Error('モデルの取得が不完全です。');
    const buffer=new ArrayBuffer(size),bytes=new Uint8Array(buffer);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}chunks.length=0;
-   trace('公式モデル GET',{status:'done',milliseconds:performance.now()-before});abort=null;
-   await verifyAndStart(buffer,id);
+   const downloadMs=performance.now()-before;trace('公式モデル GET',{status:'done',milliseconds:downloadMs});$('download-time').textContent=ms(downloadMs);abort=null;
+   await verifyAndStart(buffer,id,model);
   }catch(error){if(id===undefined){$('error').hidden=false;$('error').textContent=error.message;}else fail(error,id);}
   finally{if(id!==undefined)endMainPreparation(id);}
  }
  listen($('file'),'change',()=>{
   if(!active||disposed||mainPreparation||['loading','generating'].includes(state))return;
   file=$('file').files?.[0]||null;$('filename').textContent=file?file.name+' · '+(file.size/1000000).toFixed(1)+' MB':'未選択';
-  if(file&&file.size!==MODEL.bytes){$('error').hidden=false;$('error').textContent='指定モデルとサイズが異なります。373,719,040 bytesのファイルを選んでください。';file=null;}
+  if(file&&file.size!==selectedModel.bytes){$('error').hidden=false;$('error').textContent='選択モデルとサイズが異なります。'+selectedModel.bytes.toLocaleString()+' bytesのファイルを選んでください。';file=null;}
   setState(state);
  });
  listen($('local-load'),'click',async()=>{
   if(!active||disposed||mainPreparation||['loading','generating'].includes(state))return;
-  let id;
+  let id;const model=selectedModel;
   try{
    if(!file)throw new Error('指定モデルのファイルを選択してください。');
    id=beginLoad();const start=performance.now();trace('File.arrayBuffer',{status:'running'});
    const buffer=await file.arrayBuffer();if(!isCurrent(id))return;
-   trace('File.arrayBuffer',{status:'done',milliseconds:performance.now()-start});await verifyAndStart(buffer,id);
+   const readMs=performance.now()-start;trace('File.arrayBuffer',{status:'done',milliseconds:readMs});$('download-time').textContent=ms(readMs);await verifyAndStart(buffer,id,model);
   }catch(error){if(id===undefined){$('error').hidden=false;$('error').textContent=error.message;}else fail(error,id);}
   finally{if(id!==undefined)endMainPreparation(id);}
  });
@@ -178,13 +183,16 @@ export function mountGeneration(root,{assetBase,appBase}) {
   if(!active||disposed)return;
   try{
    if(!swGate?.isAccepted())throw new Error('Service Workerの制御を再確認してください。');
-   const prompt=validatePrompt($('prompt').value);
+   const prompt=validatePrompt($('prompt').value,selectedModel);
    if(state!=='ready'||!worker)throw new Error('モデルを読み込んでください。');
    $('error').hidden=true;$('output').textContent='';resetMetrics();clearGenerationTraces();visibleAt=null;startAt=performance.now();
-   setState('generating');status('CPUで生成中。最初の表示まで十数秒かかり、まとめて表示される場合があります。');$('elapsed').textContent='0.00 s';
+   setState('generating');status('CPUで生成中。数十秒かかり、文字列が最後にまとめて届く場合があります。');$('elapsed').textContent='0.00 s';
    clock=setInterval(()=>{if(active&&!disposed)$('elapsed').textContent=ms(performance.now()-startAt);},100);
    worker.postMessage({type:'generate',prompt,maxOutputTokens:Number($('limit').value)});
-  }catch(error){$('error').hidden=false;$('error').textContent=error.message;}
+  }catch(error){
+   if(state==='generating')fail(error);
+   else{$('error').hidden=false;$('error').textContent=error.message;}
+  }
  });
  listen($('stop'),'click',()=>{
   if(!active||disposed||!['loading','generating'].includes(state))return;
@@ -195,15 +203,41 @@ export function mountGeneration(root,{assetBase,appBase}) {
   if(!active||disposed||['loading','generating'].includes(state))return;
   epoch++;destroy();setState('empty');status('Workerを破棄しました。次の利用にはモデルを再読み込みしてください。');
  });
- for(const [index,prompt] of SAMPLES.entries()){
-  const button=doc.createElement('button');button.className='sample';button.textContent=['架空の問い合わせを整える','短い文を補完する','架空のロボットを描写する'][index];
-  listen(button,'click',()=>{if(active&&!disposed&&!['loading','generating'].includes(state)){$('prompt').value=prompt;changedPrompt();}});$('samples').append(button);
+ for(const [index] of MODEL.samples.entries()){
+  const button=doc.createElement('button');button.className='sample';
+  listen(button,'click',()=>{if(active&&!disposed&&!['loading','generating'].includes(state)){$('prompt').value=selectedModel.samples[index];changedPrompt();}});$('samples').append(button);
  }
+ for(const model of MODELS){
+  const option=doc.createElement('option');option.value=model.id;option.textContent=model.title+' · '+model.languages+' · '+model.downloadLabel;$('model').append(option);
+ }
+ function renderModel(){
+  $('model').value=selectedModel.id;$('prompt').value=selectedModel.samples[0];
+  $('hash').textContent=selectedModel.sha256;$('model-link').href=selectedModel.url;
+  $('model-card').href=selectedModel.cardUrl;$('license-link').href=selectedModel.licenseUrl;
+  $('model-details').textContent=selectedModel.name+' / '+selectedModel.bytes.toLocaleString()+' bytes / revision '+selectedModel.revision;
+  $('model-memory').textContent=selectedModel.memory;
+  $('model-language').textContent=selectedModel.inputHint;
+  $('model-summary').textContent=selectedModel.title+' · '+selectedModel.languages+' · '+selectedModel.downloadLabel;
+  $('download').textContent=selectedModel.downloadLabel+'を取得して準備する';
+  for(const [index,button] of [...$('samples').children].entries())button.textContent=selectedModel.sampleNames[index];
+ }
+ listen($('model'),'change',()=>{
+  if(!active||disposed)return;
+  let next;try{next=getModel($('model').value);}catch(error){$('model').value=selectedModel.id;$('error').hidden=false;$('error').textContent=error.message;return;}
+  if(next===selectedModel)return;
+  epoch++;destroy();selectedModel=next;file=null;$('file').value='';$('filename').textContent='未選択';
+  $('ack').checked=false;$('output').textContent='';$('error').hidden=true;$('progress').hidden=true;$('progress').value=0;
+  resetMetrics();resetLoadMetrics();traces.clear();$('trace').replaceChildren();renderModel();setState(mainPreparation?'stopped':'empty');
+  status(mainPreparation?'モデルを切り替えました。前の読み取り/ハッシュ処理の終了を待っています。終了後、確認欄をチェックして読み込んでください。':'モデルを切り替え、前のモデルと結果を消去しました。確認欄をチェックし、選択したモデルを読み込んでください。');
+  // A switch invalidates the epoch captured by an in-flight SW handshake.
+  // Revalidate the new epoch instead of leaving the selector permanently blocked.
+  if(!swGate?.isAccepted())void verifyController();
+ });
  listen($('prompt'),'input',changedPrompt);
- $('prompt').value=SAMPLES[0];$('hash').textContent=MODEL.sha256;$('model-link').href=MODEL.url;
+ renderModel();
  function interrupt(reason){
   swGate?.invalidate();epoch++;destroy();finishPending('interrupted');$('progress').hidden=true;
-  $('ack').checked=false;$('output').textContent='';resetMetrics();$('error').hidden=true;setState('stopped');
+  $('ack').checked=false;$('output').textContent='';resetMetrics();resetLoadMetrics();$('error').hidden=true;setState('stopped');
   status(reason+(mainPreparation?' Main側の読み取り/ハッシュ処理は中止できないため終了待ちです。':'')+' Workerとモデルを破棄し、結果を消去しました。確認欄をもう一度チェックして、モデルを再初期化してください。');
  }
  function onPageHide(){if(active&&!disposed)interrupt('ページを離れたため停止しました。');}

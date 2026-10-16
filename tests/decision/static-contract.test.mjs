@@ -51,3 +51,32 @@ test('copied assets exactly match verified provenance, including full model hash
     assert.equal(hash.digest('hex'), file.sha256, file.path);
   }
 });
+
+test('practical demo puts static flow, example, category and measured speed ahead of collapsed diagnostics', async () => {
+  const html = await readFile(new URL('panel.html', root), 'utf8');
+  const main = await readFile(new URL('main.mjs', root), 'utf8');
+  const css = await readFile(new URL('style.css', root), 'utf8');
+  assert.match(html, /処理のしくみ（説明図）/);
+  assert.match(html, /内部の進捗を表すものではありません/);
+  assert.match(html, /モデル約 165 MB/);
+  assert.match(html, /合計 約 183 MB/);
+  const primary = html.slice(0, html.indexOf('<details>'));
+  assert.match(primary, /MediaPipe → LiteRT-LM → LiteRT · CPU/);
+  assert.match(primary, /演算量：未推定 \/ 内部の層ごとの時間：取得不可（公開 SDK）/);
+  for (const id of ['sample', 'input', 'init', 'run', 'cancel', 'status', 'result-label', 'result-meaning', 'inference-time', 'download-time', 'setup-time']) {
+    assert.ok(primary.includes(`id="${id}"`), `primary element ${id}`);
+  }
+  for (const id of ['winner', 'confidence', 'distribution', 'timings', 'network', 'evidence', 'error-detail']) {
+    assert.equal(primary.includes(`id="${id}"`), false, `diagnostic element ${id} must be collapsed`);
+  }
+  assert.doesNotMatch(html, /<details\s+open/);
+  assert.equal((html.match(/<details>/g) || []).length, 3);
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const [, id] of main.matchAll(/\$\('([^']+)'\)/g)) {
+    assert.ok(ids.includes(id), `runtime id ${id} exists in panel`);
+  }
+  assert.match(css, /@media\(max-width:450px\)/);
+  assert.match(css, /minmax\(0,1fr\)/);
+  assert.doesNotMatch(css, /animation:|min-width: ?[4-9]\d\dpx/);
+});

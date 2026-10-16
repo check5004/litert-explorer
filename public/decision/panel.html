@@ -1,62 +1,101 @@
 <div class="decision-panel">
-<div class="panel-heading"><div class="eyebrow">DECISION MAKER</div><h2>問い合わせを、意味で振り分ける。</h2><p>日本語の架空例を使い、学習済みモデルの相対スコアを観察します。</p></div>
-    <section class="learning" aria-labelledby="learning-title">
-      <h2 id="learning-title">この実験で共有したいこと</h2>
-      <p><strong>学ぶ：</strong>学習済みモデルの意味表現を使い、候補の説明文に対する相対的なスコアを返す API を観察します。低水準の Tensor API と、業務に近い Tasks API の違いを比較できます。</p>
-      <p><strong>業務の入口：</strong>問い合わせを端末内で仮分類し、担当者が確認してから振り分ける用途。曖昧な問い合わせや候補の定義変更で出力が変わることも確認してください。</p>
-      <p><strong>実行経路：</strong><code>@mediapipe/tasks-decision 1.1.0 → LiteRT-LM → LiteRT / CPU・WASM</code>。タブ 01・02 の <code>@litertjs/core</code> とは異なる高水準 SDK です。</p>
-    </section>
-    <aside class="notice">
-      <strong>通信とデータ</strong>
-      <p>入力は固定の架空例だけです。自由入力やファイルの読込はありません。SDK・WASM・モデルをこのページと同じオリジンから読み込みます。</p>
-      <p>SDK 1.1.0 は約 60 秒後の定期処理や close() 時に Google の指標エンドポイント（odml.pa.googleapis.com/v1/log）へ POST を試みます。このページは SDK の読込前に通信ガードを設置し、その送信を遮断します。共通シェルの CSP は LLM 用の固定配信元を許可しますが、この Decision Worker は SDK より先に導入する完全一致の許可リストで、それ以外の通信を遮断します。Worker は共通 CSP を継承し、自己オリジン限定の CSP ではありません。SDK のオプトアウト機能ではありません。</p>
-      <p>この実験の資産は、共通シェルの「必要なファイルを保存」の対象外です。タブを離れると Worker は終了し、戻ったときもボタンでの再初期化が必要です。</p>
-      <p>ログは安全な送信先の origin/path・method と許可／遮断件数だけを記録し、本文・ヘッダー・API キーは記録しません。ガードの件数は通信の試行数で、ブラウザー全体のネットワーク監査ではありません。</p>
-    </aside>
-    <section aria-labelledby="control-title">
-      <h2 id="control-title">1. 初期化して試す</h2>
-      <p class="download-notice"><strong>初回初期化はモデル・SDK・WASM 合計 約 183 MB を取得します（展開後の資産サイズ。転送量は圧縮・キャッシュにより異なります）。</strong></p>
-      <p>EmbeddingGemma 2 Text 270M · 164,626,432 bytes（約 157 MiB）· @mediapipe/tasks-decision 1.1.0</p>
-      <p>初期化はボタンを押すまで始まりません。実バイト数と SHA-256 を検証します。ハッシュ検証でモデル全体を一時的にメモリーに保持するため、端末によっては失敗します。</p>
-      <div class="controls">
-        <button id="init" type="button">初期化</button>
-        <button id="close" type="button" disabled>close() で解放</button>
-        <button id="cancel" type="button" disabled>中止・Worker を終了</button>
-      </div>
-      <p id="status" role="status" aria-live="polite">未初期化</p>
-      <p id="elapsed">Worker 生存時間：N/A</p>
-      <progress id="download-progress" aria-label="検証対象モデルの受信バイト数" hidden></progress><p id="download-status"></p>
-      <p id="integrity">モデル整合性：未検証</p>
-      <label for="sample">架空の問い合わせ</label>
-      <select id="sample"><option value="">例を選んでください（未選択では推論しません）</option></select>
-      <p id="input" class="input-preview">未選択</p>
-      <button id="run" type="button" disabled>選んだ例で推論</button>
-      <p id="validation" role="status"></p>
-      <p class="small">中止は Worker の強制終了です。中止操作自体は SDK の close() を呼ばず、処理完了を意味しません。実行中の close() は無効です。中止後は再初期化できます。</p>
-    </section>
-    <section aria-labelledby="result-title">
-      <h2 id="result-title">2. 実際の SDK 出力</h2>
+  <div class="panel-heading">
+    <p class="eyebrow">問い合わせの分類</p>
+    <p class="runtime-badge">MediaPipe → LiteRT-LM → LiteRT · CPU</p>
+    <h2>この問い合わせ、どの担当へ？</h2>
+    <p>架空の問い合わせを選び、モデルが選ぶ担当候補と、この端末での処理時間を確かめます。</p>
+    <ol class="process" aria-label="処理のしくみ（説明図）"><li>問い合わせ</li><li>候補の説明と意味を比較</li><li>担当候補</li></ol>
+    <p class="small">しくみの説明図です。モデル内部の進捗を表すものではありません。</p>
+  </div>
+
+  <section class="input-card" aria-labelledby="control-title">
+    <h3 id="control-title"><span class="step">1</span> 問い合わせを選んで試す</h3>
+    <label for="sample">試す例</label>
+    <select id="sample"><option value="">問い合わせの例を選んでください</option></select>
+    <p id="input" class="input-preview">選んだ問い合わせがここに表示されます。</p>
+    <p class="small">固定の架空例だけを使います。ログインと支払いが混ざった例も試せます。</p>
+
+    <div class="prepare">
+      <p class="download-notice"><strong>初回はモデル約 165 MB の取得が必要です。</strong><br>実行用ファイルを含めて合計 約 183 MB。ボタンを押すまで取得は始まりません。</p>
+      <button id="init" type="button">モデルを準備する</button>
+      <p class="small">通信が安定した環境でお試しください。スマートフォンなどではメモリ不足で準備できない場合があります。</p>
+      <p id="status" role="status" aria-live="polite">まずモデルを準備してください。</p>
+      <progress id="download-progress" aria-label="モデルの受信バイト数" hidden></progress>
+      <p id="download-status" class="small"></p>
+    </div>
+
+    <div class="run-actions">
+      <button id="run" type="button" disabled>この例を分類する</button>
+      <button id="cancel" class="secondary" type="button" disabled>中止</button>
+    </div>
+    <p id="validation" role="status" aria-live="polite"></p>
+    <p class="small">準備が終わったら分類できます。タブを離れるとモデルは終了するため、戻ったときはもう一度準備してください。</p>
+  </section>
+
+  <section class="result-card" aria-labelledby="result-title">
+    <h3 id="result-title"><span class="step">2</span> 結果とこの端末の速さ</h3>
+    <div class="result-summary" aria-live="polite" aria-atomic="true">
+      <p class="metric-label">モデルが選んだ担当候補</p>
+      <p id="result-label" class="result-label">まだ分類していません</p>
+      <p id="result-meaning">例を選び、準備が終わったら「この例を分類する」を押してください。</p>
+    </div>
+    <div class="speed-summary">
+      <p class="metric-label">今回の分類にかかった時間</p>
+      <p id="inference-time" class="inference-time">未計測</p>
+      <p id="inference-note" class="small">分類すると実測値が表示されます。モデルの取得・準備時間は含みません。</p>
+      <p class="small compute-limit">演算量：未推定 / 内部の層ごとの時間：取得不可（公開 SDK）</p>
+      <dl class="preparation-times">
+        <div><dt>モデル取得</dt><dd id="download-time">未計測</dd></div>
+        <div><dt>準備の計測区間 合計</dt><dd id="setup-time">未計測</dd></div>
+      </dl>
+      <p class="small">同じ例をもう一度分類すると、初回との速さを比べられます。速さは端末や実行ごとに変わります。</p>
+    </div>
+    <p class="limit"><strong>結果は担当先を考えるための候補です。</strong>正解や確率を保証するものではありません。曖昧な問い合わせは人が確認してください。自動で振り分けることはありません。</p>
+  </section>
+
+  <div class="learning" role="note">
+    <p><strong>ここで学べること：</strong>問い合わせと候補の説明文の意味を比べる、端末内の分類です。候補の説明が変われば結果も変わり得ます。</p>
+    <p><strong>通信について：</strong>モデルなどの取得は必要ですが、推論のために問い合わせを外部へ送信しません。SDK の利用指標送信は、このデモの通信ガードで遮断します。</p>
+  </div>
+
+  <div class="details-stack">
+    <details>
+      <summary>結果の詳細：候補の説明・生のスコア</summary>
       <p id="winner">selectedKey：N/A</p>
       <p id="confidence">SDK confidence：N/A</p>
       <p id="call-index">この Worker での evaluateChoice 呼び出し順：N/A</p>
       <div class="scroll"><table><caption>raw probabilities（返された値をそのまま表示）</caption><thead><tr><th>キー</th><th>比較する説明文</th><th>出力値</th></tr></thead><tbody id="distribution"></tbody></table></div>
-      <p>probabilities は選んだ説明文どうしの相対的な出力です。実世界での正答率や校正済みの確信度ではありません。SDK confidence は最大 probability とは別の値です。曖昧な例や空の出力を別の回答に置換しません。担当先への自動振分けは行わず、人の確認を前提にします。</p>
-      <details><summary>未加工の返却オブジェクト</summary><pre id="raw">N/A</pre></details>
-    </section>
-    <section aria-labelledby="timing-title">
-      <h2 id="timing-title">3. この実行の計測値</h2>
-      <p>performance.now() による各関数の wall-clock 時間です。カーネル単体のベンチマークではありません。初回と再実行を区別します。未実行・未完了の値は N/A です。</p>
+      <p>probabilities は選んだ説明文どうしの相対的な出力です。実世界での正答率や校正済みの確信度ではありません。SDK confidence は最大 probability とは別の値です。曖昧な例や空の出力を別の回答に置換しません。</p>
+      <h4>未加工の返却オブジェクト</h4><pre id="raw">N/A</pre>
+    </details>
+    <details>
+      <summary>時間の詳細：取得・準備・分類を分けて確認</summary>
+      <p>分類の時間は DecisionMaker.evaluateChoice() の開始から終了までの実測です。内部の各層やカーネル単体の時間ではありません。取得はモデルの受信区間だけ、準備の合計は SDK 読込・Fileset 解決・ハッシュ検証・モデル生成・Promise 対応の完了した 5 区間を合計し、モデル取得と分類を含めません。</p>
+      <p>各値は performance.now() で計測した wall-clock 時間です。通信の圧縮・キャッシュの有無は判別しません。未実行・未完了の値は N/A です。</p>
       <div class="scroll"><table><thead><tr><th>関数・区間</th><th>ms</th><th>状態</th></tr></thead><tbody id="timings"></tbody></table></div>
-    </section>
-    <section aria-labelledby="network-title">
-      <h2 id="network-title">4. 通信ガードとライフサイクル</h2>
+      <p id="elapsed">Worker 生存時間：N/A</p>
+    </details>
+    <details>
+      <summary>モデルの条件・通信の記録・解放</summary>
+      <h4>実行環境とモデル</h4>
+      <p>HTTPS または localhost と、Web Worker・WebAssembly・Web Crypto が使えるブラウザーが必要です。最新版の Chrome / Edge と、数 GB の空きメモリがある PC を推奨します。モバイルやすべてのブラウザーでの動作は保証しません。</p>
+      <p>EmbeddingGemma 2 Text 270M · 164,626,432 bytes（約 157 MiB）· @mediapipe/tasks-decision 1.1.0。モデル約 165 MB、SDK・WASM を含めて約 183 MB は展開後の資産サイズです。転送量は圧縮・キャッシュにより異なります。</p>
+      <p>実バイト数と SHA-256 を検証します。検証でモデル全体を一時的にメモリーに保持するため、端末によっては失敗します。</p>
+      <p id="integrity">モデル整合性：未検証</p>
+      <p id="error-detail">エラーの記録はありません。</p>
+      <p>実行経路：@mediapipe/tasks-decision 1.1.0 → LiteRT-LM → LiteRT / CPU・WASM。検索・画像タブの @litertjs/core とは異なる高水準 SDK です。</p>
+      <h4>通信ガードの記録</h4>
+      <p>SDK・WASM・モデルをこのページと同じオリジンから読み込みます。この実験の資産は共通シェルの「必要なファイルを保存」の対象外です。</p>
+      <p>SDK 1.1.0 は約 60 秒後の定期処理や close() 時に Google の指標エンドポイント（odml.pa.googleapis.com/v1/log）へ POST を試みます。このページは SDK の読込前に通信ガードを設置し、その送信を遮断します。共通シェルの CSP は LLM 用の固定配信元を許可しますが、この Decision Worker は SDK より先に導入する完全一致の許可リストで、それ以外の通信を遮断します。Worker は共通 CSP を継承し、自己オリジン限定の CSP ではありません。SDK のオプトアウト機能ではありません。</p>
+      <p>ログは安全な送信先の origin/path・method と許可／遮断件数だけを記録し、本文・ヘッダー・API キーは記録しません。件数は通信の試行数で、ブラウザー全体のネットワーク監査ではありません。</p>
       <p id="counts">fetch 許可：0 / 通信遮断：0 / CSP 違反：0</p>
-      <p>約 60 秒の自然なタイマー送信と、それ以前の close() 送信は別々の初期化で確認してください。遮断後、SDK がタイマーを止めるため、同じ Worker で両方の試行が出るとは限りません。</p>
       <pre id="network">まだ通信イベントはありません。</pre>
-      <details><summary>このタブの実行記録（再初期化でリセット）</summary><pre id="evidence">N/A</pre></details>
-    </section>
-    <section class="references" aria-label="出典と限界">
-      <p>この実験は LiteRT 系ランタイムの役割と実際の出力を学ぶためのものです。ブラウザーの性能・精度・安全性を保証しません。</p>
-      <p><a href="https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/workers/decision-maker.worker.ts" target="_blank" rel="noopener noreferrer">公式 Promise 対応の出典</a> · <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers#content_security_policy" target="_blank" rel="noopener noreferrer">Blob Worker の CSP 継承</a></p>
-    </section>
+      <h4>モデルを解放する</h4>
+      <button id="close" class="secondary" type="button" disabled>モデルを解放</button>
+      <p>解放は SDK の close()、中止は Worker の強制終了です。中止は正常な close() 完了を意味しません。実行中は解放できません。</p>
+      <p>約 60 秒の自然なタイマー送信と、それ以前の close() 送信は別々の初期化で確認してください。遮断後、SDK がタイマーを止めるため、同じ Worker で両方の試行が出るとは限りません。</p>
+      <h4>このタブの実行記録（再初期化でリセット）</h4><pre id="evidence">N/A</pre>
+      <p class="references"><a href="https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/workers/decision-maker.worker.ts" target="_blank" rel="noopener noreferrer">公式 Promise 対応の出典</a> · <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers#content_security_policy" target="_blank" rel="noopener noreferrer">Blob Worker の CSP 継承</a></p>
+    </details>
+  </div>
 </div>

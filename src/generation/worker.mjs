@@ -1,4 +1,4 @@
-import {MODEL,LOADER,WASM,exactGet,blockOtherChannels,fixedProperty,supportsRelaxedSimd,validatePrompt,textFromChunk,finiteMetrics} from './policy.mjs';
+import {getModel,LOADER,WASM,exactGet,blockOtherChannels,fixedProperty,supportsRelaxedSimd,validatePrompt,textFromChunk,finiteMetrics} from './policy.mjs';
 
 const post = (type, data = {}) => self.postMessage({type,...data});
 const wasmUrl = new URL(WASM, self.location.href).href;
@@ -23,7 +23,7 @@ fixedProperty(self,'importScripts',(...urls) => {
 });
 blockOtherChannels(self,audit);
 fixedProperty(self,'Worker',class {constructor(){audit('nested-worker');throw new Error('Nested workers are disabled');}});
-let sdk,engine,conversation,busy=false;
+let sdk,engine,conversation,model,busy=false;
 async function timed(name,run) {
   const start=performance.now();post('phase',{name,status:'running'});
   try {const result=await run();post('phase',{name,status:'done',milliseconds:performance.now()-start});return result;}
@@ -35,25 +35,26 @@ self.onmessage = async ({data}) => {
   try {
     if (data.type==='initialize') {
       if(engine)throw new Error('Engine is already initialized');
-      if(!(data.buffer instanceof ArrayBuffer)||data.buffer.byteLength!==MODEL.bytes)throw new Error('モデルサイズが一致しません。');
+      model=getModel(data.modelId);
+      if(!(data.buffer instanceof ArrayBuffer)||data.buffer.byteLength!==model.bytes)throw new Error('モデルサイズが一致しません。');
       if(!supportsRelaxedSimd())throw new Error('この固定ランタイムにはWasm relaxed SIMD対応のデスクトップブラウザが必要です。');
       await timed('SHA-256 再検証 (Worker)',async()=>{
         const digest=await crypto.subtle.digest('SHA-256',data.buffer);
         const hash=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
-        if(hash!==MODEL.sha256)throw new Error('モデルのSHA-256が一致しません。');
+        if(hash!==model.sha256)throw new Error('モデルのSHA-256が一致しません。');
       });
       sdk=await timed('SDK import',()=>import('@litert-lm/core'));
       await timed('loadLiteRtLm',()=>sdk.loadLiteRtLm(loaderUrl));
       networkOpen=false;
-      const model=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(data.buffer));controller.close();}});
-      engine=await timed('Engine.create',()=>sdk.Engine.create({model,backend:sdk.Backend.CPU,benchmarkEnabled:true,mainExecutorSettings:{maxNumTokens:512,samplerBackend:sdk.Backend.CPU,backendConfig:{kv_increment_size:128,prefill_chunk_size:128,number_of_threads:1}}}));
-      post('ready',{backend:'CPU / XNNPACK',runtime:'@litert-lm/core 0.18.0',model:'SmolLM2 360M',networkClosed:true});
+      const modelStream=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(data.buffer));controller.close();}});
+      engine=await timed('Engine.create',()=>sdk.Engine.create({model:modelStream,backend:sdk.Backend.CPU,benchmarkEnabled:true,mainExecutorSettings:{maxNumTokens:512,samplerBackend:sdk.Backend.CPU,backendConfig:{kv_increment_size:128,prefill_chunk_size:128,number_of_threads:1}}}));
+      post('ready',{backend:'CPU / XNNPACK',runtime:'@litert-lm/core 0.18.0',model:model.title,modelId:model.id,networkClosed:true});
     } else if(data.type==='generate') {
       if(!engine)throw new Error('モデルを先に読み込んでください。');
-      const prompt=validatePrompt(data.prompt);
+      const prompt=validatePrompt(data.prompt,model);
       const maxOutputTokens=Number(data.maxOutputTokens);
-      if(![16,32,40].includes(maxOutputTokens))throw new Error('出力上限が不正です。');
-      conversation=await timed('createConversation',()=>engine.createConversation({sessionConfig:{maxOutputTokens,samplerBackend:sdk.Backend.CPU,samplerParams:{type:sdk.SamplerType.TOP_P,k:1,p:1,temperature:1,seed:42}}}));
+      if(![16,32,40,64].includes(maxOutputTokens))throw new Error('出力上限が不正です。');
+      conversation=await timed('createConversation',()=>engine.createConversation({...(model.disableThinking?{preface:{extra_context:{enable_thinking:false}}}:{}),sessionConfig:{maxOutputTokens,samplerBackend:sdk.Backend.CPU,samplerParams:{type:sdk.SamplerType.TOP_P,k:1,p:1,temperature:1,seed:42}}}));
       let chunks=0,firstChunkMs=null;
       const start=performance.now();post('phase',{name:'sendMessageStreaming',status:'running'});
       for await(const chunk of conversation.sendMessageStreaming(prompt)) {

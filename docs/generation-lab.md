@@ -1,3 +1,55 @@
+# 日本語・英語のローカル生成実験
+
+## 現在のモデル選択（2026-10-16）
+
+初期選択は Qwen3 0.6B dynamic INT4、日本語の短い文章を言い換える例です。SmolLM2 360Mは英語の比較用として残します。選択欄に言語・モデルサイズを表示し、必要なメモリの注意を確認して「読み込む」を押すまで取得しません。モデルを変えると取得/推論を停止し、Worker・旧結果・ファイル選択をリセットします。
+
+Qwen3の固定公開資産は Apache-2.0 / ungated、344,671,744 bytes。モデルURL・revision・SHA-256・最終CDNパスは src/generation/policy.mjs で固定します。Pagesへモデルを同梱しません。MainとWorkerの両方でサイズとSHA-256を検証し、選択モデルに対応する許可URLだけを使用します。
+
+両モデルとも、この @litert-lm/core 0.18.0 の公式Web対応一覧外の実験経路です。他の推論SDKには置き換えていません。CPU/WASM単一スレッド、既存のネットワーク制限とService Workerポリシー確認を維持します。
+
+### 日本語とメモリの限界
+
+Qwen3 INT4のNode上の実SDK/WASM確認では、日本語の会議案内を丁寧な文へ変換できました。一方、一般知識の質問で誤答し、別の言い換えでは依頼する人と実行する人が逆になる出力もありました。「日本語を出せる」ことは「正しく使える」保証ではありません。意味・事実・敬語は人が確認してください。
+
+Nodeの隔離した参考計測でピークRSSは約2.4〜2.8 GiBでした（モデルの読み込み方法で差があります）。これはブラウザの必要メモリや最低要件の実測ではありません。モデル受信・検証中の複製やブラウザ自体の使用量が加わるため、数GBの空きメモリを持つPCを推奨します。モバイル動作は保証しません。INT8候補は約614 MBで同じ試験のRSSが約3.91 GiBになり、事実誤答も残ったため、この選択UIには追加していません。
+
+日本語の思考非表示設定はモデルの会話テンプレートに enable_thinking:false を渡します。内部の思考を観測・表示する機能ではありません。
+
+### 時間の読み方
+
+モデル取得・初期化と、今回の生成を分けます。生成は実際にSDKから返った文字列だけを表示します。初文字列のMain受信、Worker受信、SDK TTFTは別区間です。出力チャンク数とトークン数も異なります。MAC/FLOPは未推定、内部各層の時間は取得不可です。
+
+### Qwen3の根拠と固定資産
+
+確認日：2026-10-16。一次資料は次のとおりです。
+
+- [Qwen公式のQwen3発表](https://qwenlm.github.io/blog/qwen3/)は119言語・方言の一覧に日本語を含めています。[Qwen3-0.6Bの上流モデルカード](https://huggingface.co/Qwen/Qwen3-0.6B)も多言語対応とApache-2.0を明記しています。
+- [LiteRT変換物の固定リビジョン](https://huggingface.co/litert-community/Qwen3-0.6B/tree/e6687177e00897731e7716267eebd4eba0dde7c2)で Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm を選択しました。Hugging Face APIで private:false / gated:false / Apache-2.0、およびLFSのサイズとSHA-256を確認しています。
+- revision: e6687177e00897731e7716267eebd4eba0dde7c2
+- ファイルサイズ: 344,671,744 bytes（表示は約345 MB。329 MiBとは単位が異なります）
+- SHA-256: 03e7da1eb1108b50dffaa9bb52cc7bcbad2eb0c66ca990267f480c1e545d2856
+- [Qwen上流のApache-2.0ライセンス](https://huggingface.co/Qwen/Qwen3-0.6B/blob/main/LICENSE)。認証・利用申請・新たな個別同意を要求しない公開ファイルから、無認証GETで実際に取得し、ファイル全体のSHA-256を検証しました。
+- 固定URLのHTTP HEADでは、検証対象CDNの最終パスと Content-Length:344671744 / Access-Control-Allow-Origin:* を確認しました。これはブラウザでの取得成功を代替する証明ではありません。
+
+配布カードのLiteRT-LM互換性記述は、Webでの動作保証ではありません。[SDK 0.18.0配布物](https://registry.npmjs.org/@litert-lm/core/0.18.0)のREADMEはGemma 4 E2B/E4Bのweb資産だけを掲載しています。一方、[更新される公式JSガイド](https://ai.google.dev/edge/litert-lm/js)はGemma 4のgpu資産を掲載しています。Qwenのこのファイルはどちらにも掲載されないため、実験的なCPU/WASM経路と表示しています。拡張子だけを根拠に対応済みとはしていません。
+
+### 固定Workerによる日本語実行の確認
+
+公開用にビルドした lm-worker.js をNode v24.19.0の最小ホストshimで読み、実際の initialize（modelId付き）→Worker SHA-256→loadLiteRtLm→Engine.create→createConversation→sendMessageStreaming→getBenchmarkInfo→Conversation.delete を通しました。SDKもモデルもモックではありません。ただしNodeのホストshimであり、ブラウザの表示・CORS・Worker起動・ネットワーク全体の検証とは区別します。
+
+- CPU/XNNPACK単一スレッド、最大512トークン、TOP_P（k=1、p=1、temperature=1、seed=42）、出力上限32トークン。
+- Qwenのみ preface.extra_context.enable_thinking:false を設定。初期表示の日本語入力例に /no_think などの追記はしていません。
+- 初期表示の会議案内から、読める日本語の言い換えを生成。sendMessageStreamingは31.55秒、SDK decode13トークン、受信12チャンク。SDK TTFT25.70秒、Workerの初文字列受信31.55秒でした。
+- Node側でモデルをArrayBufferに載せたこの試験のピークRSSは約2.76 GiB。先行のファイルストリームでSDKを直接動かした試験は約2.43 GiBでした。UIでは両者を参考範囲として表示します。どちらもブラウザ最低要件ではありません。
+- 別の架空例では依頼の主体が変わる出力、一般知識では誤答を確認しました。日本語の動作確認は品質保証ではありません。
+
+生の実行ログ・モデル本体・調査用ファイルは公開配布物に含めません。現在版の実ブラウザ確認結果はREADMEの最新の検証記録を参照してください。
+
+以下は以前の英語版を検証した履歴です。現在版の実ブラウザ確認とは区別します。
+
+---
+
 # LiteRT-LM 英語生成実験
 
 ## 学習目標と業務へのつながり

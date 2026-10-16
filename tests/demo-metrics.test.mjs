@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {coreMeasurements,modelCompute,CORE_FLOWS}from'../src/demo-metrics.mjs';
+test('unmeasured is absent, never a demo zero',()=>{assert.equal(coreMeasurements(null).inferenceMs,null);assert.equal(modelCompute({}).macs,null);assert.equal(modelCompute({knownMacs:0}).macs,0);assert.equal(modelCompute({knownMacs:NaN}).macs,null)});
+test('model acquisition is measured separately, not inferred from total minus inference',()=>{const m=coreMeasurements({cold:true,totalMs:9000,inferenceMs:200,preparationMs:8500},[{type:'asset',ms:4000},{type:'timing',name:'runtime.initialize',ms:300}]);assert.equal(m.downloadMs,4000);assert.equal(m.preparationMs,8500);assert.equal(m.inferenceMs,200)});
+test('reused model has no acquisition measurement',()=>{const m=coreMeasurements({cold:false,totalMs:100,inferenceMs:90,preparationMs:0.02});assert.equal(m.downloadMs,null);assert.equal(m.reused,true);assert.equal(m.preparationMs,.02)});
+test('short flow is descriptive, not per-layer fake progress',()=>{assert.equal(CORE_FLOWS.detect.length,4);assert.equal(CORE_FLOWS.search.length,4);assert(CORE_FLOWS.detect.flat().join().includes('320'))});

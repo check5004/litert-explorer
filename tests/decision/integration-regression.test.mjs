@@ -116,7 +116,7 @@ test('expected root SW controller is accepted; a different script URL is refused
   allowed.click('init'); assert.equal(allowed.workers.length, 1);
   const refused = fixture({ scriptURL: 'https://local.test/another-sw.js' });
   refused.click('init'); assert.equal(refused.workers.length, 0);
-  assert.match(refused.get('validation').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
+  assert.match(refused.get('error-detail').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
 });
 test('controllerchange during model download terminates unfinished work and suppresses stale progress', () => {
   const f = fixture({ scriptURL: 'https://local.test/sw.js' });
@@ -148,7 +148,7 @@ test('reinitialization after an unknown controller change refuses the new contro
   f.serviceWorker.controller = { scriptURL: 'https://local.test/unknown-sw.js' };
   f.serviceWorker.dispatch('controllerchange'); f.click('init');
   assert.equal(f.workers.length, 1);
-  assert.match(f.get('validation').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
+  assert.match(f.get('error-detail').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
 });
 
 // Execute only the isolated streamed-response consumer with small synthetic
@@ -212,7 +212,7 @@ test('configured nested application service worker is trusted instead of a hardc
   });
   wrongRoot.click('init');
   assert.equal(wrongRoot.workers.length, 0);
-  assert.match(wrongRoot.get('validation').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
+  assert.match(wrongRoot.get('error-detail').textContent, /UNKNOWN_SERVICE_WORKER_CONTROLLER/);
 });
 
 test('disposed panels remove service-worker listeners and inactive panels ignore unrelated controller/CSP changes', () => {

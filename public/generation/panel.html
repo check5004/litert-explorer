@@ -1,15 +1,65 @@
-<section class="panel-heading" aria-labelledby="generation-heading"><div class="section-top"><span class="eyebrow">ENGLISH GENERATION</span><span class="badge">実験版・PC向け</span></div><h2 id="generation-heading">英語生成を、待ち時間まで観察する。</h2><p>SmolLM2 360Mを本物のLiteRT-LMで実行。説明は日本語、生成は英語のみです。</p></section>
-<div class="warning"><b>まず、実験の限界を確認してください。</b><ul><li>デスクトップPC向け。モデルは約374 MB、初回はランタイム約35 MBも読み込みます。実行には数GBのメモリが必要です。Nodeでの参考計測はピーク約2.7 GiB、短い生成で約13〜21秒。ブラウザ・端末で変わります。</li><li>このモデルは公式にはAndroid向けです。LiteRT-LM 0.18.0のWeb対応モデル一覧には含まれません。このタブは互換性を試す実験です。</li><li>日本語は検証で文字化け・反復が発生しました。英語でも指示を守らず、不正確な内容を生成します。業務判断や重要な文章には使わないでください。</li></ul></div>
-<section class="warning"><b>社内共有で見るポイント</b><p>直接 Tensor を扱う Core API に対して、このタブは <code>@litert-lm/core 0.18.0 → LiteRT</code> の生成用 API を使います。架空の英語メモを整える用途で、モデル取得とローカル推論の境界、最初の出力までの待ち時間、出力上限・チャンクとトークンの違いを観察できます。</p><p>生成した文章の品質は人が確認します。選別・推薦を人の代わりに決定せず、外部サービスへの送信も行いません。出力上限で文が途中になる場合があります。このタブの生成用モデルとランタイムはCoreのオフライン保存対象外です。</p></section><div class="grid"><section class="card"><div class="section-top"><span class="eyebrow">01 / PREPARE</span><span id="state" class="badge">未読み込み</span></div><h3>モデルを、自分で読み込む。</h3><p>自動ダウンロード・自動初期化はしません。モデルはこのサイトの配布ファイルに含まれません。</p>
-<label class="ack"><input id="ack" type="checkbox">数GBの空きメモリがあるPCで、英語のみの実験として利用します。</label>
-<button id="download" class="primary" disabled>公式モデルを約374 MBダウンロードして初期化</button>
-<p class="small">Hugging Face → 検証済みCDN（us.aws.cdn.hf.co）へGETします。接続先にはIPアドレス等の通常の接続情報が伝わります。Cookie・認証情報・入力文は付けません。ブラウザによるリダイレクトの各途中経路はJSから見えません。モデルはSHA-256検証後にだけ読み込みます。</p>
-<div class="divider">または、同じモデルのローカルファイル</div><label for="file">モデルファイル（.litertlm）</label><input id="file" type="file" accept=".litertlm"><p id="filename" class="small">未選択</p><button id="local-load" class="secondary" disabled>選んだファイルを検証して初期化</button>
-<details><summary>指定モデル・ライセンス・検証値</summary><p>Apache-2.0 · SmolLM2_360M_instruct.litertlm<br>373,719,040 bytes · revision 507c99cfe6541ba2bcd84818786f7b025935e5e1</p><p><a id="model-link" target="_blank" rel="noopener noreferrer">固定リビジョンの公式モデル</a> · <a href="https://huggingface.co/litert-community/SmolLM2-360M-Instruct" target="_blank" rel="noopener noreferrer">モデルカード</a></p><p class="small">SHA-256</p><code id="hash"></code></details>
-<progress id="progress" aria-label="公式モデルのダウンロード進捗" max="1" value="0" hidden></progress>
-<div class="section-top stage-two"><span class="eyebrow">02 / GENERATE</span><span class="small">英語・ASCIIのみ</span></div><label for="prompt">架空の文章で試す</label><textarea id="prompt" rows="4" maxlength="400" spellcheck="false" autocomplete="off"></textarea><div id="samples" class="samples"></div><label class="limit" for="limit">出力上限（SDKのトークン数）<select id="limit"><option value="16">16</option><option value="32" selected>32</option><option value="40">40</option></select></label><p class="small">個人情報・機密情報は入力しないでください。入力文はこのタブの専用Workerだけで推論します。毎回、新しい会話になります。</p>
-<div class="actions"><button id="run" class="primary" disabled>生成する ↗</button><button id="stop" class="danger" disabled>停止してモデルを破棄</button><button id="release" class="secondary" disabled>モデルを解放</button></div><p id="status" role="status" aria-live="polite">モデルはまだ読み込んでいません。</p><p id="error" role="alert" class="error" hidden></p>
-<h4>実際のモデル出力</h4><pre id="output" class="output" aria-live="polite"></pre><p class="small">実際に受信した文字列をそのまま表示します。文字送りの演出・事前に用意した回答はありません。生成内容はHTMLとして解釈しません。</p></section>
-<aside class="card"><span class="eyebrow">LIVE INSPECTOR</span><h3>何を測っている？</h3><p>関数の入口と出口を、壁時計で観測します。内部の演算子別プロファイルではありません。</p><ol id="trace" class="trace"></ol><div class="metrics"><div><b id="elapsed">—</b><span>生成操作からの経過時間</span></div><div><b id="visible-time">—</b><span>画面が最初の文字列を受信</span></div><div><b id="worker-time">—</b><span>Workerが最初の文字列を受信</span></div><div><b id="sdk-ttft">—</b><span>SDK内部のTTFT</span></div><div><b id="generated-tokens">—</b><span>SDK decodeトークン数</span></div><div><b id="prefill-tokens">—</b><span>SDK prefillトークン数</span></div><div><b id="decode-speed">—</b><span>SDK decode速度</span></div><div><b id="chunk-count">—</b><span>受信チャンク数</span></div><div><b id="context-tokens">—</b><span>会話コンテキストのトークン数</span></div></div>
-<div class="note"><b>チャンク ≠ トークン</b><p>実測では20チャンクに対してSDK decodeは21トークンでした。EOS等が理由かは未確認です。表示文字数からトークン数を推定しません。</p></div><div class="note"><b>Streaming APIでも、まとめて届くことがある</b><p>NodeのCPU検証では最初のチャンクが約15秒後に届き、残りもほぼ同時に届きました。SDKのTTFTと、画面への最初の到着時間は別物です。</p></div><details open><summary>実際のAPIの流れ</summary><ol><li>サイズ・SHA-256でモデルを検証</li><li>loadLiteRtLm：固定のAsyncify Wasmを読み込む</li><li>Engine.create：CPU / XNNPACK、最大512トークン</li><li>createConversation：TOP_P、k=1、seed=42</li><li>sendMessageStreaming：本物の応答チャンク</li><li>getBenchmarkInfo：SDK計測値を取得</li><li>Conversation.delete：会話を破棄</li></ol></details><details><summary>通信と停止の境界</summary><p>モデル取得はMain側の固定URLだけ。WorkerはSDK読み込み前に独立のネットワーク制限を設置し、同じ場所の指定ローダーとWasmだけを許可します。Wasm読み込み後はfetchも閉じます。XHR・WebSocket等はブロックします。WorkerがMainのCSPを継承するとは仮定しません。同一オリジンの配信コードを信頼する前提です。Wasmのfetchはリダイレクトを拒否し、認証情報を付けません。ローダーのimportScriptsは要求URLだけを制限します。スクリプトの途中のリダイレクト・認証情報の扱いはブラウザ管理のため、配信元がリダイレクトせず返すことの別途確認が必要です。</p><p>Service Workerがある場合は、このアプリのroot登録・activeオブジェクト・明示的なポリシーバージョン応答を確認できたときだけ利用できます。旧版・未知の制御は拒否し、途中で管理状態が変わればモデルを破棄して再読み込みを要求します。実SW管理下のブラウザ試験はまだ別途必要です。</p><p>停止やタブ切り替えはWorkerをterminateしてモデルごと破棄します。タブを離れると生成結果・計測値も消去し、戻ったときは確認欄の再チェックとモデルの再初期化が必要です。中止できないファイル読み取りやSHA-256処理の間は、新しい読み込みを開始しません。SDKのcancel()が処理中のWorkerへすぐ届くとは仮定しません。再試行には新しいWorkerとモデルの再読み込みが必要です。</p><p>この実験のコード監査と隔離した推論ではテレメトリ送信を見つけていません。これはブラウザ全体の通信や、拡張機能・ページを改変した環境まで保証するものではありません。</p></details><p class="small privacy-note">LiteRT-LM 0.18.0 · SmolLM2 360M · 実験的CPU経路。このタブはモデルを永続保存しません。ブラウザの一般的なキャッシュ動作は別途適用されます。配信ポリシーの確認は同一オリジンのアプリコードを信頼する前提で、実行中コードの認証ではありません。</p></aside></div>
-
+<section class="panel-heading" aria-labelledby="generation-heading">
+ <div class="section-top"><span class="eyebrow">端末内で文章を生成</span><span class="badge">実験版・PC向け</span></div>
+ <h2 id="generation-heading">文章を生成して、速さと内容を試す</h2>
+ <p>入力を用意し、モデルを読み込んで実行。LiteRT-LM → LiteRT CPUの本物の応答と、かかった時間を確かめます。</p>
+</section>
+<ol class="process" aria-label="文章生成の4ステップ">
+ <li><span>1</span><b>入力</b><small>架空の文章を用意</small></li>
+ <li><span>2</span><b>準備</b><small>モデルを取得・検証</small></li>
+ <li><span>3</span><b>生成</b><small>端末内のCPUで推論</small></li>
+ <li><span>4</span><b>確認</b><small>結果と時間を比較</small></li>
+</ol>
+<div class="warning"><b>小さなモデルの動きを学ぶための実験です。</b><p>数GBの空きメモリがあるPC向けです。日本語でも事実の誤りや、依頼を約束に変えるなど意味の変化が起きます。業務判断や重要な文章には使わず、出力は必ず人が確認してください。</p></div>
+<div class="grid">
+ <section class="card input-card" aria-labelledby="input-heading">
+  <div class="section-top"><span class="eyebrow">01 / 入力</span><span id="state" class="badge">未読み込み</span></div>
+  <h3 id="input-heading">まず、試す文章を用意する。</h3>
+  <label for="model">使用するモデル</label><select id="model" class="model-select" aria-describedby="model-memory"></select>
+  <p id="model-memory" class="small"></p>
+  <label for="prompt">架空の文章で試す <span id="model-language" class="label-hint">日本語・英語など / 400文字まで</span></label>
+  <textarea id="prompt" rows="4" maxlength="400" spellcheck="false" autocomplete="off" aria-describedby="input-privacy"></textarea>
+  <div id="samples" class="samples" aria-label="入力例"></div>
+  <p id="input-privacy" class="small">個人情報・機密情報は入力しないでください。推論時、入力文はこのタブの専用Workerで処理します。毎回、新しい会話になります。</p>
+  <div class="section-top stage-two"><span class="eyebrow">02 / 準備</span><span class="small">自動ダウンロードなし</span></div>
+  <h3>選んだモデルを準備する。</h3>
+  <p id="model-summary" class="model-summary"></p>
+  <label class="ack"><input id="ack" type="checkbox">数GBの空きメモリがあるPCで、実験的なCPU経路として利用することを確認しました。</label>
+  <button id="download" class="primary" disabled>約345 MBを取得して準備する</button>
+  <p class="small">初回はランタイム約35 MBも読み込みます。モデル変更時は前のモデル・選択ファイル・結果を消去し、再度確認と読み込みが必要です。</p>
+  <progress id="progress" aria-label="モデルのダウンロード進捗" max="1" value="0" hidden></progress>
+  <details><summary>手元のモデルファイルを使う</summary><p>選択したモデルと同一の固定ファイルだけを読み込めます。サイズとSHA-256を検証します。</p><label for="file">モデルファイル（.litertlm）</label><input id="file" type="file" accept=".litertlm"><p id="filename" class="small">未選択</p><button id="local-load" class="secondary" disabled>選んだファイルを検証して準備</button></details>
+  <label class="limit" for="limit">出力上限（SDKのトークン数）<select id="limit"><option value="16">16</option><option value="32" selected>32</option><option value="40">40</option><option value="64">64</option></select></label>
+  <p class="small">上限で文が途中になる場合があります。文字数とトークン数は異なります。</p>
+  <div class="actions"><button id="run" class="primary" disabled>文章を生成する ↗</button><button id="stop" class="danger" disabled>停止してモデルを破棄</button><button id="release" class="secondary" disabled>モデルを解放</button></div>
+  <p id="status" role="status" aria-live="polite">入力例を確認したら、モデルの準備へ進んでください。</p><p id="error" role="alert" class="error" hidden></p>
+ </section>
+ <section class="card result-card" aria-labelledby="result-heading">
+  <span class="eyebrow">03 / 結果</span><h3 id="result-heading">実際に生成された文章</h3>
+  <pre id="output" class="output" aria-live="polite"></pre>
+  <p class="small">実際に受信した文字列をそのまま表示します。用意した回答や文字送り演出はなく、HTMLとして解釈しません。</p>
+  <div class="section-top stage-two"><span class="eyebrow">04 / この端末で実測</span><span class="small">実測値だけを表示</span></div>
+  <h3>どこに時間がかかった？</h3>
+  <div class="metrics primary-metrics"><div><b id="download-time">—</b><span>モデル取得 / ファイル読取</span></div><div><b id="setup-time">—</b><span>検証・ランタイム初期化</span></div><div><b id="elapsed">—</b><span>生成操作から完了まで</span></div></div>
+  <p class="small">演算量（MAC）は未推定です。モデル内部のレイヤー別時間・演算子別プロファイルは取得していません。</p>
+  <p class="small">取得時間は通信状況、生成時間は入力・出力・端末に依存します。準備の時間と生成の時間を分けて比べます。停止時は中断までの時間です。</p>
+  <details><summary>最初の出力・トークンなどの詳細</summary>
+   <div class="metrics"><div><b id="visible-time">—</b><span>Mainが最初の文字列を受信</span></div><div><b id="worker-time">—</b><span>Workerが最初の文字列を受信</span></div><div><b id="sdk-ttft">—</b><span>SDK内部のTTFT</span></div><div><b id="generated-tokens">—</b><span>SDK decodeトークン数</span></div><div><b id="prefill-tokens">—</b><span>SDK prefillトークン数</span></div><div><b id="decode-speed">—</b><span>SDK decode速度</span></div><div><b id="chunk-count">—</b><span>受信チャンク数</span></div><div><b id="context-tokens">—</b><span>会話のトークン数</span></div></div>
+   <p><b>チャンク ≠ トークン</b>。受信回数とSDK内部のトークン数は別々に計測します。Main受信は描画が終わった時刻ではありません。</p><p><b>Streaming APIでも、まとめて届くことがあります。</b> CPU検証ではSDK内部TTFTより遅く文字列が到着しました。ここに表示する各時刻は同じ意味ではありません。</p>
+  </details>
+  <details><summary>開発者向け：関数ごとの実行ログ</summary><p>関数の入口と出口の経過時間です。内部の演算子別プロファイルではありません。</p><ol id="trace" class="trace"></ol></details>
+  <details><summary>実験の範囲・社内共有で見るポイント</summary>
+   <p>直接Tensorを扱うCore APIに対し、このタブは @litert-lm/core 0.18.0 → LiteRT のEngine / Conversation APIで生成します。モデル取得とローカル推論の境界、出力上限、最初の表示までの待ち時間を観察します。</p>
+   <p>Qwen3は日本語・英語などの多言語モデル、SmolLM2はこの教材では英語・ASCIIのみです。どちらも固定SDKのWeb対応モデル一覧には含まれません。公開のLiteRTコミュニティ配布物をCPUで動かす実験的な組み合わせです。モバイルや全ブラウザでの動作は保証しません。</p>
+   <p>メモリ表示はNodeでの短文試験の参考値であり、ブラウザの必要メモリ量ではありません。OS・ブラウザ・入力長などで変わります。モデルと生成ランタイムはCoreのオフライン保存対象外です。</p>
+   <p>日本語が読める形で出ても、事実や意味が正しいとは限りません。選別・推薦を人の代わりに決定せず、外部サービスへの送信も行いません。</p>
+  </details>
+  <details><summary>選択モデル・ライセンス・検証値</summary><p>Apache-2.0 · 公開・認証不要</p><p id="model-details" class="small"></p><p><a id="model-link" target="_blank" rel="noopener noreferrer">固定リビジョンのモデル</a> · <a id="model-card" target="_blank" rel="noopener noreferrer">モデルカード</a> · <a id="license-link" target="_blank" rel="noopener noreferrer">ライセンス</a></p><p class="small">SHA-256</p><code id="hash"></code></details>
+  <details><summary>通信と停止の境界</summary>
+   <p>モデル取得はHugging Faceと検証済みCDN（us.aws.cdn.hf.co）への固定URLのGETだけです。接続先にはIPアドレス等の通常の接続情報が伝わります。Cookie・認証情報・入力文を付けません。ブラウザによるリダイレクトの各途中経路はJSから見えません。サイズとSHA-256をMainとWorkerの両方で検証します。</p>
+   <p>WorkerはSDK読み込み前に独立の通信制限を設置し、指定ローダーとWasmだけを許可します。Wasm読み込み後はfetchも閉じ、XHR・WebSocket等もブロックします。同一オリジンの配信コードを信頼する前提です。Wasmのfetchはリダイレクトを拒否し、認証情報を付けません。ローダーのimportScriptsは要求URLだけを制限し、配信元がリダイレクトせず返すことは別途確認が必要です。</p>
+   <p>Service Workerがある場合は、このアプリのroot登録・activeオブジェクト・明示的なポリシーバージョン応答が確認できたときだけ利用できます。旧版・未知の制御は拒否します。実SW管理下のブラウザ試験は別途必要です。</p>
+   <p>停止・モデル変更・タブ切り替えはWorkerをterminateしてモデルを破棄します。モデル変更とタブ離脱では結果も消去し、再度確認して再初期化します。中止できないMainの読み取りやハッシュ処理が残る間は新しい読み込みを始めません。即時のOSメモリ回収は保証しません。</p>
+   <p>このタブは入力・出力・モデルを永続保存しません。ブラウザの一般的なキャッシュ動作は別途適用されます。コード監査と隔離した試験ではテレメトリを見つけていませんが、ブラウザ全体や拡張機能の通信の保証ではありません。</p>
+  </details>
+ </section>
+</div>

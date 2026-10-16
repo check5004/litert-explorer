@@ -122,7 +122,7 @@ test('close then terminate preserves the recorded successful close', () => {
   assert.equal(f.evidence().state, 'closed');
   assert.equal(f.evidence().timings.close.status, 'completed');
   assert.equal(f.evidence().events.at(-1).closePreviouslyCompleted, true);
-  assert.match(f.get('status').textContent, /close\(\) 完了.*Worker 終了/);
+  assert.match(f.get('status').textContent, /モデルを解放しました/);
   assert.doesNotMatch(f.get('status').textContent, /未実行|記録なし/);
   assert.equal(f.get('cancel').disabled, true);
   assert.equal(f.get('init').disabled, false);
@@ -262,7 +262,7 @@ test('BFCache return after a successful close preserves close timing and outcome
   assert.equal(f.evidence().state, 'closed');
   assert.equal(f.evidence().timings.close.status, 'completed');
   assert.deepEqual(f.timing('close'), { value: '2.50', status: '完了' });
-  assert.match(f.get('status').textContent, /close\(\) 完了.*Worker 終了/);
+  assert.match(f.get('status').textContent, /モデルを解放しました/);
   assert.equal(f.get('cancel').disabled, true);
 });
 
@@ -301,7 +301,7 @@ test('deactivation during initialization terminates and revokes immediately, sto
   assert.match(f.timing('modelFetch').status, /未完了/);
   assert.equal(f.get('download-progress').hidden, true);
   assert.doesNotMatch(f.get('download-status').textContent, /取得中/);
-  assert.match(f.get('status').textContent, /close\(\) 完了の記録なし/);
+  assert.match(f.get('status').textContent, /中止しました/);
   assert.equal(f.get('init').disabled, true);
   const stopped = f.evidence();
   worker.emit({ type: 'state', state: 'ready' });
@@ -365,7 +365,7 @@ test('deactivation during close labels it incomplete instead of claiming success
   assert.equal(worker.terminationCount, 1);
   assert.equal(f.evidence().state, 'cancelled');
   assert.deepEqual(f.timing('close'), { value: 'N/A', status: 'タブ切替・未完了' });
-  assert.match(f.get('status').textContent, /完了の記録なし/);
+  assert.match(f.get('status').textContent, /中止しました/);
 });
 
 test('completed output and successful close evidence remain inspectable after tab leave', () => {
@@ -416,4 +416,108 @@ test('stylesheet and model bootstrap follow the supplied nested asset base rathe
   assert.match(bootstrap, /https:\/\/local\.test\/project\/decision\/decision-worker\.mjs/);
   assert.match(bootstrap, /https:\/\/local\.test\/project\/decision\/assets\/embeddinggemma-2-text-270m\.litertlm/);
   assert.doesNotMatch(bootstrap, /https:\/\/local\.test\/probe\//);
+});
+
+test('primary speed summary starts unmeasured and keeps download, setup and inference separate', () => {
+  const f = fixture();
+  assert.equal(f.get('inference-time').textContent, '未計測');
+  assert.equal(f.get('download-time').textContent, '未計測');
+  assert.equal(f.get('setup-time').textContent, '未計測');
+  f.click('init');
+  const worker = f.workers[0];
+  worker.emit({ type: 'stage', stage: 'modelFetch' });
+  assert.equal(f.get('download-time').textContent, '取得中');
+  worker.emit({ type: 'timing', key: 'modelFetch', milliseconds: 1234, status: 'completed' });
+  for (const key of ['sdkImport', 'fileset', 'modelHash', 'create']) {
+    worker.emit({ type: 'timing', key, milliseconds: 100, status: 'completed' });
+  }
+  assert.equal(f.get('download-time').textContent, '1.23 秒');
+  assert.equal(f.get('setup-time').textContent, '準備中');
+  assert.equal(f.get('inference-time').textContent, '未計測');
+  worker.emit({ type: 'timing', key: 'promiseWrapper', milliseconds: 100, status: 'completed' });
+  worker.emit({ type: 'state', state: 'ready' });
+  assert.equal(f.get('setup-time').textContent, '500.00 ms');
+  assert.equal(f.get('inference-time').textContent, '未計測');
+});
+
+test('primary category is mapped only from SDK selectedKey and retains unmodified raw scores', () => {
+  const f = fixture();
+  const worker = f.initializeReady();
+  f.get('sample').value = SAMPLES[0].id; // A billing example can still receive any SDK choice.
+  f.get('sample').dispatch('change');
+  f.click('run');
+  assert.equal(f.get('result-label').textContent, '分類しています');
+  assert.equal(f.get('inference-time').textContent, '計測中');
+  worker.emit({ type: 'timing', key: 'evaluateChoice', milliseconds: 1520, status: 'completed' });
+  const result = { selectedKey: 'technical', confidence: 0.31, probabilities: { billing: 0.7, technical: -2 } };
+  worker.emit({ type: 'result', attemptedCallIndex: 1, result });
+  worker.emit({ type: 'state', state: 'ready' });
+  assert.equal(f.get('result-label').textContent, '不具合・エラー');
+  assert.ok(f.get('result-meaning').textContent.includes(CRITERIA.technical));
+  assert.deepEqual(JSON.parse(f.get('raw').textContent), result);
+  assert.equal(f.get('inference-time').textContent, '1.52 秒');
+  assert.match(f.get('inference-note').textContent, /初回の分類/);
+  assert.doesNotMatch(f.get('result-meaning').textContent, /確率|正解率/);
+  f.click('run');
+  worker.emit({ type: 'timing', key: 'evaluateChoice', milliseconds: 650, status: 'completed' });
+  worker.emit({ type: 'result', attemptedCallIndex: 2, result });
+  worker.emit({ type: 'state', state: 'ready' });
+  assert.equal(f.get('inference-time').textContent, '650.00 ms');
+  assert.match(f.get('inference-note').textContent, /2 回目/);
+  f.get('sample').value = SAMPLES[1].id;
+  f.get('sample').dispatch('change');
+  assert.equal(f.get('result-label').textContent, 'まだ分類していません');
+  assert.equal(f.get('inference-time').textContent, '未計測');
+  assert.doesNotMatch(f.get('inference-note').textContent, /2 回目/);
+});
+
+test('empty, missing and unknown SDK choices never become fabricated category answers', () => {
+  const f = fixture();
+  const worker = f.initializeReady();
+  for (const [result, expected] of [
+    [{ selectedKey: '', probabilities: { billing: 0.99 } }, '候補を選べませんでした'],
+    [{ probabilities: { billing: 0.99 } }, '分類結果が返りませんでした'],
+    [{ selectedKey: 'unknown', probabilities: { billing: 0.99 } }, '未定義の候補が返りました'],
+    [{ selectedKey: 'constructor' }, '未定義の候補が返りました'],
+  ]) {
+    worker.emit({ type: 'result', attemptedCallIndex: 1, result });
+    assert.equal(f.get('result-label').textContent, expected);
+    assert.deepEqual(JSON.parse(f.get('raw').textContent), result);
+    assert.equal(f.get('inference-time').textContent, '未計測');
+  }
+});
+
+test('failed or interrupted inference is never shown as a completed speed result', () => {
+  const f = fixture();
+  const worker = f.initializeReady();
+  f.get('sample').value = SAMPLES[0].id;
+  f.get('sample').dispatch('change');
+  f.click('run');
+  worker.emit({ type: 'timing', key: 'evaluateChoice', milliseconds: 412, status: 'failed' });
+  worker.emit({ type: 'operation-error', code: 'SDK_OR_BROWSER_OPERATION_FAILED', stage: 'evaluateChoice' });
+  assert.equal(f.get('inference-time').textContent, '未完了');
+  assert.match(f.get('validation').textContent, /準備し直して/);
+  assert.match(f.get('error-detail').textContent, /SDK_OR_BROWSER_OPERATION_FAILED/);
+  assert.deepEqual(f.timing('evaluateChoice'), { value: '412.00', status: '失敗までの実測' });
+  const next = f.initializeReady();
+  f.click('run');
+  f.click('cancel');
+  assert.equal(f.get('inference-time').textContent, '未完了');
+  assert.equal(f.get('result-label').textContent, '分類を中止しました');
+  assert.equal(next.terminationCount, 1);
+});
+
+test('failed setup stays incomplete and actionable error is separate from technical detail', () => {
+  const f = fixture();
+  f.click('init');
+  const worker = f.workers[0];
+  worker.emit({ type: 'stage', stage: 'modelHash' });
+  worker.emit({ type: 'timing', key: 'modelHash', milliseconds: 50, status: 'failed' });
+  worker.emit({ type: 'operation-error', code: 'MODEL_SHA256_MISMATCH', stage: 'modelHash' });
+  assert.equal(f.get('setup-time').textContent, '未完了');
+  assert.equal(f.get('inference-time').textContent, '未計測');
+  assert.match(f.get('validation').textContent, /検証に失敗.*もう一度準備/);
+  assert.doesNotMatch(f.get('validation').textContent, /MODEL_SHA256_MISMATCH/);
+  assert.match(f.get('error-detail').textContent, /MODEL_SHA256_MISMATCH/);
+  assert.equal(f.get('init').disabled, false);
 });

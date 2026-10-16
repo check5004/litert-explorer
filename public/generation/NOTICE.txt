@@ -1,4 +1,4 @@
-LiteRT English Lab experimental integration.
+LiteRT Local Text Lab experimental integration.
 
 @litert-lm/core 0.18.0 and @litertjs/wasm-utils 2.0.0
 Copyright Google LLC / The ODML Authors; Apache License 2.0.
@@ -11,3 +11,11 @@ The optionally fetched model is declared Apache-2.0 by:
 https://huggingface.co/litert-community/SmolLM2-360M-Instruct
 Exact revision: 507c99cfe6541ba2bcd84818786f7b025935e5e1
 Base model: HuggingFaceTB/SmolLM2-360M-Instruct.
+
+Qwen3-0.6B is NOT included in this distribution.
+The optionally fetched model is declared Apache-2.0 by:
+https://huggingface.co/litert-community/Qwen3-0.6B
+Exact revision: e6687177e00897731e7716267eebd4eba0dde7c2
+Artifact: Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm
+Base model: Qwen/Qwen3-0.6B.
+https://huggingface.co/Qwen/Qwen3-0.6B/blob/main/LICENSE

@@ -1,7 +1,7 @@
 name: Build and deploy LiteRT Lab
 on:
   push:
-    branches: [main]
+    branches: [main, "ux/**"]
   workflow_dispatch:
 
 permissions:
@@ -48,6 +48,7 @@ jobs:
           path: dist
           retention-days: 1
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

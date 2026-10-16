@@ -20,7 +20,7 @@ class Element extends Events {
  remove(){this.removed=true;}
 }
 async function flushValidation(){for(let i=0;i<8;i++)await Promise.resolve();}
-function setup({controlled=false,autoActivate=true,fetch:fetchImpl}={}){
+function setup({controlled=false,autoActivate=true,fetch:fetchImpl,gateFactory}={}){
  const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
  const workers=[],sw=new Events(),win=new Events(),gateOptions=[],fetches=[],timers=new Set();
  sw.controller=controlled?{scriptURL:'https://unknown.test/sw.js'}:null;
@@ -34,19 +34,20 @@ function setup({controlled=false,autoActivate=true,fetch:fetchImpl}={}){
  const root=new Element();root.ownerDocument=doc;root.querySelector=selector=>get(selector.slice(1));
  const originalFetch=async(...args)=>{fetches.push(args);if(fetchImpl)return fetchImpl(...args);throw Error('Unexpected network in unit test');};
  const originalXHR=class OriginalXHR{};
- const scope={...policy,document:doc,location:{href:'https://example.test/teaching/#generation'},navigator:{serviceWorker:sw},Worker,URL,Headers,Request,ArrayBuffer,Uint8Array,AbortController,ReadableStream,performance:{now:()=>100},crypto:{subtle:{digest:async()=>digest()}},fetch:originalFetch,XMLHttpRequest:originalXHR,setInterval:()=>{const id={};timers.add(id);return id;},clearInterval:id=>timers.delete(id),addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),createServiceWorkerGate:options=>{gateOptions.push(options);return policy.createServiceWorkerGate(options);},console};
+ const scope={...policy,document:doc,location:{href:'https://example.test/teaching/#generation'},navigator:{serviceWorker:sw},Worker,URL,Headers,Request,ArrayBuffer,Uint8Array,AbortController,ReadableStream,performance:{now:()=>100},crypto:{subtle:{digest:async()=>digest()}},fetch:originalFetch,XMLHttpRequest:originalXHR,setInterval:()=>{const id={};timers.add(id);return id;},clearInterval:id=>timers.delete(id),addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),createServiceWorkerGate:options=>{gateOptions.push(options);return gateFactory?gateFactory(options):policy.createServiceWorkerGate(options);},console};
  scope.window=scope;vm.runInNewContext(source,scope);
  const panel=scope.mountGeneration(root,{assetBase:'https://example.test/teaching/generation/',appBase:'https://example.test/teaching/'});
  if(autoActivate)panel.activate();
  return {get,workers,scope,sw,win,panel,root,gateOptions,fetches,timers,originalFetch,originalXHR};
 }
-function digest(){return Uint8Array.from(policy.MODEL.sha256.match(/../g),b=>parseInt(b,16)).buffer;}
+function digest(model=policy.MODEL){return Uint8Array.from(model.sha256.match(/../g),b=>parseInt(b,16)).buffer;}
 async function acknowledge(env){env.get('ack').checked=true;await env.get('ack').dispatch('change');}
-async function loadMockModel(env){
+async function loadMockModel(env,model=policy.MODEL){
  await acknowledge(env);
  // An actual ArrayBuffer verifies ownership-transfer identity; bytes are not read in these mock tests.
- const buffer=new ArrayBuffer(policy.MODEL.bytes);
- env.get('file').files=[{name:policy.MODEL.name,size:policy.MODEL.bytes,arrayBuffer:async()=>buffer}];
+ const buffer=new ArrayBuffer(model.bytes);
+ env.scope.crypto.subtle.digest=async()=>digest(model);
+ env.get('file').files=[{name:model.name,size:model.bytes,arrayBuffer:async()=>buffer}];
  await env.get('file').dispatch('change');await env.get('local-load').dispatch('click');
  return {worker:env.workers.at(-1),buffer};
 }
@@ -189,4 +190,64 @@ test('dispose removes local/global listeners and late hash completion remains in
  env.get('file').files=[{name:policy.MODEL.name,size:policy.MODEL.bytes,arrayBuffer:async()=>buffer}];await env.get('file').dispatch('change');const operation=env.get('local-load').dispatch('click');await hashStarted;
  env.panel.dispose();env.panel.dispose();assert.equal(env.win.listenerCount(),0);assert.equal(env.sw.listenerCount(),0);assert.equal(env.get('download').listenerCount(),0);assert.equal(env.get('samples').children[0].listenerCount(),0);assert.equal(env.root.children[0].removed,true);
  finishHash(digest());await operation;assert.equal(env.workers.length,0);assert.throws(()=>env.panel.activate(),/disposed/);
+});
+
+async function switchModel(env,model){env.get('model').value=model.id;await env.get('model').dispatch('change');}
+test('selector defaults to Japanese and switch clears file, output, times and acknowledgement without fetching',async()=>{
+ const env=setup();await flushValidation();assert.equal(env.get('model').value,policy.MODEL.id);assert.equal(env.get('model').children.length,2);assert.match(env.get('prompt').value,/会議/);
+ const {worker}=await loadMockModel(env);worker.emit({type:'ready'});await env.get('run').dispatch('click');worker.emit({type:'chunk',text:'old output',chunks:1});
+ env.get('download-time').textContent='5.00 s';env.get('setup-time').textContent='8.00 s';
+ const other=policy.MODELS[1];await switchModel(env,other);
+ assert.equal(worker.terminated,true);assert.equal(env.get('output').textContent,'');assert.equal(env.get('ack').checked,false);assert.equal(env.get('file').value,'');assert.equal(env.get('filename').textContent,'未選択');
+ assert.equal(env.get('download-time').textContent,'—');assert.equal(env.get('setup-time').textContent,'—');assert.equal(env.get('elapsed').textContent,'—');
+ assert.equal(env.get('hash').textContent,other.sha256);assert.equal(env.get('model-link').href,other.url);assert.equal(env.get('prompt').value,other.samples[0]);assert.equal(env.get('trace').children.length,0);assert.equal(env.fetches.length,0);
+ worker.emit({type:'chunk',text:'STALE',chunks:2});worker.emit({type:'complete'});worker.emit({type:'ready'});assert.equal(env.get('output').textContent,'');assert.equal(env.get('run').disabled,true);
+ await acknowledge(env);assert.equal(env.get('local-load').disabled,true);
+ const next=await loadMockModel(env,other);assert.equal(next.worker.lastMessage.modelId,other.id);next.worker.emit({type:'ready'});
+ env.get('prompt').value='日本語';await env.get('run').dispatch('click');assert.equal(next.worker.lastMessage.type,'initialize');assert.match(env.get('error').textContent,/ASCII/);
+});
+test('switch during download aborts and cannot auto-start the newly selected model',async()=>{
+ let signal;const env=setup({fetch:async(_url,init)=>{signal=init.signal;return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('Aborted'))));}});
+ await acknowledge(env);const pending=env.get('download').dispatch('click');await flushValidation();
+ await switchModel(env,policy.MODELS[1]);assert.equal(signal.aborted,true);await pending;
+ assert.equal(env.workers.length,0);assert.equal(env.fetches.length,1);assert.equal(env.get('ack').checked,false);assert.equal(env.get('download').disabled,true);assert.equal(env.get('error').hidden,true);
+});
+for(const phase of ['read','hash'])test('switch during '+phase+' keeps the noncancellable lock and discards the old completion',async()=>{
+ const env=setup();await acknowledge(env);let finish;const pending=new Promise(resolve=>finish=resolve),buffer=new ArrayBuffer(policy.MODEL.bytes);
+ let started;const hashStarted=new Promise(resolve=>started=resolve);
+ if(phase==='hash')env.scope.crypto.subtle.digest=async()=>{started();return pending;};
+ env.get('file').files=[{name:policy.MODEL.name,size:policy.MODEL.bytes,arrayBuffer:async()=>phase==='read'?pending:buffer}];
+ await env.get('file').dispatch('change');const operation=env.get('local-load').dispatch('click');if(phase==='hash')await hashStarted;else await flushValidation();
+ await switchModel(env,policy.MODELS[1]);await acknowledge(env);await env.get('download').dispatch('click');
+ assert.equal(env.get('download').disabled,true);assert.equal(env.fetches.length,0);assert.equal(env.workers.length,0);
+ finish(phase==='read'?buffer:digest());await operation;assert.equal(env.workers.length,0);assert.equal(env.get('trace').children.length,0);assert.equal(env.get('filename').textContent,'未選択');
+});
+test('selected model hash rejects bytes matching the other catalog entry',async()=>{
+ const env=setup();await switchModel(env,policy.MODELS[1]);await acknowledge(env);
+ const model=policy.MODELS[1];env.scope.crypto.subtle.digest=async()=>digest(policy.MODEL);
+ env.get('file').files=[{name:model.name,size:model.bytes,arrayBuffer:async()=>new ArrayBuffer(model.bytes)}];await env.get('file').dispatch('change');await env.get('local-load').dispatch('click');
+ assert.equal(env.workers.length,0);assert.match(env.get('error').textContent,/SHA-256/);
+});
+test('preparation times are independent of prompt and generation timing reset',async()=>{
+ const env=setup();const {worker}=await loadMockModel(env);assert.equal(env.get('download-time').textContent,'0.00 s');assert.equal(env.get('setup-time').textContent,'—');
+ worker.emit({type:'ready'});assert.equal(env.get('setup-time').textContent,'0.00 s');env.get('elapsed').textContent='old';await env.get('prompt').dispatch('input');
+ assert.equal(env.get('elapsed').textContent,'—');assert.equal(env.get('download-time').textContent,'0.00 s');assert.equal(env.get('setup-time').textContent,'0.00 s');
+});
+
+test('model switch revalidates a pending SW handshake for the new epoch',async()=>{
+ let accepted=false;const pending=[];
+ const env=setup({gateFactory:()=>({isAccepted:()=>accepted,invalidate:()=>{accepted=false;},dispose:()=>{},validate:({isCurrent})=>new Promise(resolve=>pending.push(()=>{const valid=isCurrent();if(valid)accepted=true;resolve(valid);} ))})});
+ assert.equal(pending.length,1);assert.equal(env.get('download').disabled,true);
+ await switchModel(env,policy.MODELS[1]);assert.equal(pending.length,2);
+ pending[0]();await flushValidation();assert.equal(env.get('download').disabled,true);assert.equal(env.get('error').hidden,true);
+ pending[1]();await flushValidation();await acknowledge(env);
+ assert.equal(env.get('download').disabled,false);assert.equal(env.get('model').value,policy.MODELS[1].id);assert.equal(env.workers.length,0);assert.equal(env.fetches.length,0);
+});
+
+test('synchronous generation dispatch failure releases worker/timer and rejects late messages',async()=>{
+ const env=setup();const {worker}=await loadMockModel(env);worker.emit({type:'ready'});
+ worker.postMessage=()=>{throw new Error('Worker dispatch failed');};
+ await env.get('run').dispatch('click');
+ assert.equal(worker.terminated,true);assert.equal(env.timers.size,0);assert.equal(env.get('state').textContent,'エラー');assert.equal(env.get('elapsed').textContent,'—');assert.equal(env.get('run').disabled,true);assert.equal(env.get('stop').disabled,true);assert.equal(env.get('prompt').disabled,false);
+ worker.emit({type:'ready'});worker.emit({type:'chunk',text:'STALE',chunks:1});assert.equal(env.get('run').disabled,true);assert.equal(env.get('output').textContent,'');
 });

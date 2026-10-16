@@ -23,7 +23,9 @@ A MediaPipe maintainer clarified that the project's source and models, unless sp
 - The version-pinned five-method Promise compatibility adapter follows Google's Apache-2.0 sample: https://github.com/google-ai-edge/mediapipe-samples-web/blob/main/src/workers/decision-maker.worker.ts . It adapts return types, not model scores.
 - The SDK attempts utilization-metric uploads. The app blocks these before native transport and uses Blob-worker CSP as defense in depth. This is not an SDK opt-out. See https://developers.google.com/edge/mediapipe/solutions/tasks#mediapipe_tasks_privacy_notice .
 
-## Experimental English generation
+## Experimental local text generation
 
 - @litert-lm/core 0.18.0 and its scoped @litertjs/wasm-utils 2.0.0: Google/ODML Authors, Apache-2.0. The existing Core runtime retains wasm-utils 2.5.3. Original bundle/runtime notices are preserved. https://github.com/google-ai-edge/LiteRT-LM
 - Optional model (not in the Pages artifact): litert-community/SmolLM2-360M-Instruct, Apache-2.0, public/ungated, revision 507c99cfe6541ba2bcd84818786f7b025935e5e1. The model targets Android and is not listed among this SDK's officially web-supported artifacts. https://huggingface.co/litert-community/SmolLM2-360M-Instruct
+
+- Optional Japanese model (not in the Pages artifact): litert-community/Qwen3-0.6B, Apache-2.0, public/ungated. Pinned revision e6687177e00897731e7716267eebd4eba0dde7c2; Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm; 344,671,744 bytes; SHA-256 03e7da1eb1108b50dffaa9bb52cc7bcbad2eb0c66ca990267f480c1e545d2856. Model card: https://huggingface.co/litert-community/Qwen3-0.6B . This artifact is outside the package's officially web-supported list; exact-version CPU/WASM tests are documented separately. No new model terms acceptance or authentication is required for the public asset.
